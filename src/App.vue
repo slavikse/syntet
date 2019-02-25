@@ -27,6 +27,7 @@
 </template>
 
 <script>
+import * as tf from '@tensorflow/tfjs';
 import debounce from 'lodash.debounce';
 
 const leftKeyCode = 37;
@@ -38,20 +39,113 @@ export default {
   data() {
     return {
       // При больших значениях из за округлений вычислений начинают смещаться полосы.
-      quantityLanes: 3,
+      quantityLanes: 2,
       laneSize: 4,
       roadMarkingSize: 0.1,
       currentLane: 0,
-      turnTime: 500,
+      turnTime: 200,
       laneChangeDebounced: debounce(this.laneChange, this.turnTime),
+
+      model: undefined,
+      training: undefined,
+      currentTime: 0,
+      maximumTime: 3,
+      // todo признак, что сторона была изменена. каждые 5 секунд сбрасывается.
+      isTriggered: false,
     };
   },
 
   mounted() {
     this.setStyleProperties();
+    this.handleReset();
+
+    setInterval(() => {
+      this.currentTime += 1;
+      this.handleRunning();
+    }, 1000);
+
+    setInterval(() => {
+      if (!this.isTriggered) {
+        this.handleCrash(0, this.maximumTime);
+      }
+
+      this.isTriggered = false;
+      this.currentTime = 0;
+      this.handleTrain();
+    }, this.maximumTime * 1000);
+
+    // Подталкивающий метод. Случайная смена стороны.
+    setInterval(() => {
+      if (this.currentLane === 0) {
+        this.currentLane = 1;
+      } else {
+        this.currentLane = 0;
+      }
+
+      this.setCurrentLane();
+
+      this.isTriggered = true;
+      const time = JSON.parse(JSON.stringify(this.currentTime));
+      this.handleCrash(1, time);
+      console.log('ШАЛОСТЬ УДАЛАСЬ');
+    }, (this.maximumTime + 2) * 1000);
   },
 
   methods: {
+    handleReset() {
+      this.model = tf.sequential();
+      this.model.add(tf.layers.dense({ inputShape: [1], activation: 'sigmoid', units: 6 }));
+      this.model.add(tf.layers.dense({ inputShape: [6], activation: 'sigmoid', units: 1 }));
+      this.model.compile({ loss: 'meanSquaredError', optimizer: tf.train.adam(0.1) });
+
+      this.training = {
+        // Входное время.
+        inputs: [],
+        // Действие: 0 - ничего, 1 - сменить сторону.
+        labels: [],
+      };
+    },
+
+    handleRunning() {
+      const time = JSON.parse(JSON.stringify(this.currentTime));
+
+      return new Promise(() => {
+        const prediction = this.model.predict(tf.tensor2d([[time / this.maximumTime]]));
+
+        prediction.data().then(([pred]) => {
+          if (pred > 0.5) {
+            if (this.currentLane === 0) {
+              this.currentLane = 1;
+            } else {
+              this.currentLane = 0;
+            }
+
+            this.setCurrentLane();
+
+            this.isTriggered = true;
+            this.handleCrash(1, time);
+            console.log('yes', pred);
+          } else {
+            console.log('no', pred);
+          }
+        });
+      });
+    },
+
+    handleCrash(train, time) {
+      const trainS = JSON.parse(JSON.stringify(train));
+      const timeS = JSON.parse(JSON.stringify(time));
+
+      this.training.inputs.push([timeS / this.maximumTime]);
+      this.training.labels.push([trainS]);
+    },
+
+    handleTrain() {
+      // console.log('Training', this.training.inputs);
+      // console.log(this.training.labels);
+      this.model.fit(tf.tensor2d(this.training.inputs), tf.tensor2d(this.training.labels));
+    },
+
     setStyleProperties() {
       const { style } = document.documentElement;
 
@@ -84,7 +178,6 @@ export default {
           break;
 
         default:
-          console.info('Нет такой команды!');
       }
 
       this.setCurrentLane();
@@ -198,16 +291,15 @@ body {
   height: 7rem;
   background: url('./assets/car.png') no-repeat 100% / cover;
   transform: translateX(var(--player-current-lane));
-  transition: var(--turn-time) transform ease-in-out;
+  /*transition: var(--turn-time) transform ease-in-out;*/
   will-change: transform;
 }
 
-/* todo переменные */
 .player-turns {
-  --angleRotation: 4deg;
-  transform: rotate(10deg);
-  transform-origin: bottom;
-  animation: player-turns 1s alternate infinite ease-in-out;
+  /*--angleRotation: 4deg;*/
+  /*transform: rotate(10deg);*/
+  /*transform-origin: bottom;*/
+  /*animation: player-turns 1s alternate infinite ease-in-out;*/
 }
 
 /* todo разобраться как */
