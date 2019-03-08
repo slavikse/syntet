@@ -1,12 +1,13 @@
 import Vue from 'vue';
 
-// import App from './App.vue';
-import Car from './Car.vue';
-import store from './store';
+import 'aframe';
+import 'aframe-extras';
+import 'aframe-physics-system';
+
+// import Car from './Car.vue';
+import Maze from './Maze.vue';
 
 Vue.config.productionTip = false;
+Vue.config.silent = process.env.NODE_ENV === 'production';
 
-new Vue({
-  store,
-  render: h => h(Car),
-}).$mount('#app');
+new Vue({ render: h => h(Maze) }).$mount('#app');

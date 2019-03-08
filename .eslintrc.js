@@ -4,12 +4,17 @@ module.exports = {
     node: true,
   },
   extends: [
-    'plugin:vue/essential',
+    'plugin:vue/recommended',
     '@vue/airbnb',
   ],
   rules: {
-    'no-console': process.env.NODE_ENV === 'production' ? 'error' : 'off',
-    'no-debugger': process.env.NODE_ENV === 'production' ? 'error' : 'off',
+    'no-console': 'off',
+    'no-param-reassign': 'off',
+    'object-curly-newline': 'off',
+    'vue/no-use-v-if-with-v-for': 'error',
+    'vue/no-v-html': 'warning',
+    'vue/html-closing-bracket-spacing': 'error',
+    'vue/prop-name-casing': 'error',
   },
   parserOptions: {
     parser: 'babel-eslint',

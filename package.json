@@ -1,26 +1,32 @@
 {
   "name": "syntet",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "scripts": {
     "serve": "vue-cli-service serve",
     "build": "vue-cli-service build",
-    "lint": "vue-cli-service lint"
+    "lint": "vue-cli-service lint",
+    "host": "ngrok http 8080 -host-header='localhost:8080'"
   },
   "dependencies": {
-    "@tensorflow/tfjs": "^0.15.3",
+    "@tensorflow/tfjs": "^1.0.0",
+    "aframe": "^0.9.0",
+    "aframe-extras": "^6.0.0",
+    "aframe-physics-system": "^3.3.0",
     "clone-deep": "^4.0.1",
-    "vue": "^2.6.8",
-    "vuex": "^3.1.0"
+    "vue": "^2.6.8"
   },
   "devDependencies": {
-    "@vue/cli-plugin-babel": "^3.4.1",
-    "@vue/cli-plugin-eslint": "^3.4.1",
-    "@vue/cli-service": "^3.4.1",
+    "@types/aframe": "^0.8.2",
+    "@types/three": "^0.93.26",
+    "@vue/cli-plugin-babel": "^3.5.0",
+    "@vue/cli-plugin-eslint": "^3.5.0",
+    "@vue/cli-service": "^3.5.0",
     "@vue/eslint-config-airbnb": "^4.0.0",
     "babel-eslint": "^10.0.1",
-    "eslint": "^5.15.0",
+    "eslint": "^5.15.1",
     "eslint-plugin-vue": "^5.2.2",
+    "ngrok": "^3.1.1",
     "node-sass": "^4.11.0",
     "sass-loader": "^7.1.0",
     "vue-template-compiler": "^2.6.8"

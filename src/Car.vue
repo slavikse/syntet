@@ -1,6 +1,6 @@
 <template>
   <div
-    class="App"
+    class="Car"
     tabindex="0"
   >
     <div class="epoch">
@@ -50,7 +50,7 @@ function getRandom(min, max) {
 }
 
 export default {
-  name: 'App',
+  name: 'Car',
 
   data() {
     return {
@@ -269,7 +269,7 @@ body {
 </style>
 
 <style scoped>
-.App {
+.Car {
   background-color: var(--bg-color);
   outline: none;
 }
