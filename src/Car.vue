@@ -129,8 +129,8 @@ export default {
         // К примеру сторон = 4:
         // [0, 1, 1, 1] - перейти с дорожки 0.
         // [1, 0, 1, 1] - перейти с дорожки 1.
-        // [1, 1, 0 ,1] - перейти с дорожки 2.
-        // [1, 1, 1 ,0] - перейти с дорожки 3.
+        // [1, 1, 0, 1] - перейти с дорожки 2.
+        // [1, 1, 1, 0] - перейти с дорожки 3.
         labels: [],
       };
     },
@@ -187,10 +187,10 @@ export default {
           this.enemyLane / (this.quantityLanes - 1),
         ]),
       );
-      console.log(cloneDeep([
-        this.enemyTop / maxCollisionHeight,
-        this.enemyLane / (this.quantityLanes - 1),
-      ]));
+      // console.log(cloneDeep([
+      //   this.enemyTop / maxCollisionHeight,
+      //   this.enemyLane / (this.quantityLanes - 1),
+      // ]));
 
       console.log('label', cloneDeep(label));
       this.training.labels.push(cloneDeep(label));
