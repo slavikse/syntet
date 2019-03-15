@@ -58,8 +58,8 @@
       :position="position"
       src="#AssetsImagesRoof"
       height="0.1"
-      width="2"
-      depth="2"
+      width="1"
+      depth="1"
       material="color: #111"
       static-body
     />
@@ -117,7 +117,6 @@
       src="#AssetsImagesRoof"
       :animation="{
         property: 'position',
-        easing: 'linear',
         to: actor.position,
         dur: actor.delay,
       }"
@@ -181,9 +180,8 @@ export default {
           position: '0 0 0',
         },
         {
-          // todo 0 0 25
           name: 'Between_1',
-          position: '0 0 20',
+          position: '0 0 25',
         },
         {
           name: 'Finish',
@@ -313,17 +311,17 @@ export default {
       this.model.add(tf.layers.dense({
         inputShape: [2], // [x, y] - Нормализованные координаты актёра.
         activation: 'sigmoid',
-        units: 16,
+        units: 6,
       }));
 
       this.model.add(tf.layers.dense({
-        inputShape: [16],
+        inputShape: [6],
         activation: 'sigmoid',
         units: 4, // [north, east, south, west] - Прогноз стороны для передвижения.
       }));
 
       this.model.compile({
-        optimizer: tf.train.adam(0.05),
+        optimizer: tf.train.adam(0.1),
         loss: 'meanSquaredError',
       });
     },
@@ -430,6 +428,9 @@ export default {
       // todo
       let isNext = false;
 
+      // console.log('X', this.x);
+      console.log('Y', this.y, maxStepY);
+
       if (this.x === 0 && this.y === maxStepY + step) {
         console.log('Between_1 !');
         isNext = true;
@@ -446,9 +447,6 @@ export default {
         this.x / maxStepX,
         this.y / maxStepY,
       ]);
-
-      console.log('X', this.x / maxStepX);
-      console.log('Y', this.y / maxStepY);
 
       this.training.labels.push(label);
 
