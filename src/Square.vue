@@ -1,11 +1,11 @@
 <template>
   <div>
     <div class="stat time">
-      {{ time }} / Прошло секунд: {{ startTime }}.
+      Прошло секунд: {{ startTime }}
     </div>
 
     <div class="stat epoch">
-      Эпоха: {{ epoch }}
+      Шаг: {{ actor.step }} | Эпоха: {{ epoch }}
     </div>
 
     <div
@@ -23,12 +23,13 @@
           :key="index"
           :class="['cell', {
             'available': cell === 1,
-            'starting-checkpoint': cell === 8,
+            'starting-checkpoint': cell === 7,
+            'middle-checkpoint': cell === 8,
             'finishing-checkpoint': cell === 9,
           }]"
         >
           <div
-            v-if="cell === 8"
+            v-if="cell === 7"
             class="starting-checkpoint"
           >
             СТАРТ
@@ -55,6 +56,18 @@
 <script>
 import * as tf from '@tensorflow/tfjs';
 
+function getRandomArbitrary(min, max) {
+  return Math.random() * (max - min) + min;
+}
+
+// let maxActorStep = -1;
+
+// todo вместо 8 - точки подкрепления - на каждом следующем шаге,
+//   давать чуть больше подкрепления, чем на предыдущем,
+//   что будет поддталкивать пройти дальше.
+
+// todo помечать пройденные ячейки, как заблокированные и возвращать при сброче обратно.
+
 export default {
   name: 'Square',
 
@@ -70,29 +83,30 @@ export default {
       // 8 - Начальная точка.
       // 9 - Финишная точка.
       field: [
-        8, 0, 0, 0, 0, 0,
-        1, 0, 0, 0, 0, 0,
-        1, 0, 0, 0, 0, 0,
-        1, 0, 0, 0, 0, 0,
-        1, 0, 0, 0, 0, 0,
-        1, 1, 1, 1, 1, 9,
+        0, 0, 0, 0, 0, 0, 0,
+        0, 7, 0, 0, 0, 0, 0,
+        0, 1, 0, 0, 0, 0, 0,
+        0, 1, 0, 0, 0, 0, 0,
+        0, 1, 0, 0, 0, 0, 0,
+        0, 8, 1, 1, 1, 9, 0,
+        0, 0, 0, 0, 0, 0, 0,
       ],
       size: -1,
       quantityColumns: -1,
       quantityRows: -1,
 
       actor: {
-        x: 1,
-        y: 1,
-        delay: 100,
+        x: 2,
+        y: 2,
+        step: 0,
+        delay: 20,
       },
 
       model: tf.sequential(),
-      // Порог прохождения (вероятность) для принятия решения.
-      threshold: 0.4,
       epoch: 0,
       training: {
-        // [x, y] - Нормализованные координаты актёра.
+        // [x, y, step] - Нормализованные координаты актёра.
+        // step - количество шагов, сделанных со стартовой позиции.
         inputs: [],
         // [1, 0, 0, 0] - Пойти на север (north).
         // [0, 1, 0, 0] - Пойти на восток (east).
@@ -110,6 +124,8 @@ export default {
   },
 
   mounted() {
+    // maxActorStep = this.field.length ** 2;
+
     this.setupModel();
 
     // Timer.
@@ -131,9 +147,16 @@ export default {
   methods: {
     setupModel() {
       this.model.add(tf.layers.dense({
-        // [x, y] - Нормализованные координаты актёра.
-        inputShape: [2],
-        activation: 'sigmoid', // todo relu ???
+        // [x, y, step] - Нормализованные координаты актёра.
+        // step - количество шагов, сделанных со стартовой позиции.
+        inputShape: [3],
+        activation: 'sigmoid',
+        units: 10,
+      }));
+
+      this.model.add(tf.layers.dense({
+        inputShape: [10],
+        activation: 'sigmoid',
         units: 10,
       }));
 
@@ -171,128 +194,107 @@ export default {
     async checkExit() {
       clearTimeout(this.modelPredictId);
 
-      const { x, y } = this.actor;
-      let label = [];
-
-      switch (true) {
-        // north
-        case y < 1:
-          label = [-1, 1, 1, 1];
-          break;
-
-        // east
-        case x > this.size:
-          label = [1, -1, 1, 1];
-          break;
-
-        // south
-        case y > this.size:
-          label = [1, 1, -1, 1];
-          break;
-
-        // west
-        case x < 1:
-          label = [1, 1, 1, -1];
-          break;
-
-        default:
-          label = [];
-      }
-
-      // console.log('label', [...label]);
-      // console.log('actor', { ...this.actor });
-
+      const { x, y, step } = this.actor;
       const cell = this.field[(x - 1) + (y - 1) * this.size];
 
+      let label = [0, 0, 0, 0];
+      // Тренировать на накопленных training.inputs при выходе за границы.
+      let isModelFit = false;
+
       if (cell === 0) {
-        label = [-0.5, -0.5, -0.5, -0.5];
+        label = [
+          getRandomArbitrary(-0.5, 0.2),
+          getRandomArbitrary(-0.5, 0.2),
+          getRandomArbitrary(-0.5, 0.2),
+          getRandomArbitrary(-0.5, 0.2),
+        ];
+
+        isModelFit = true;
       }
 
-      if (label.length > 0) {
-        await this.modelFit({ label });
+      if (cell === 1) {
+        label = [
+          getRandomArbitrary(0.5, 0.8),
+          getRandomArbitrary(0.5, 0.8),
+          getRandomArbitrary(0.5, 0.8),
+          getRandomArbitrary(0.5, 0.8),
+        ];
+      }
+
+      if (cell === 7) {
+        label = [
+          getRandomArbitrary(0.1, 0.3),
+          getRandomArbitrary(0.1, 0.3),
+          getRandomArbitrary(0.1, 0.3),
+          getRandomArbitrary(0.1, 0.3),
+        ];
+      }
+
+      if (cell === 8) {
+        label = [
+          getRandomArbitrary(1, 1.4),
+          getRandomArbitrary(1, 1.4),
+          getRandomArbitrary(1, 1.4),
+          getRandomArbitrary(1, 1.4),
+        ];
+      }
+
+      if (cell === 9) {
+        console.log('ФИНИШ!', x, y);
+
+        label = [
+          getRandomArbitrary(2, 3),
+          getRandomArbitrary(2, 3),
+          getRandomArbitrary(2, 3),
+          getRandomArbitrary(2, 3),
+        ];
+      }
+
+      console.log('cell', cell, 'label', label);
+
+      this.training.inputs.push([
+        (x - 1) / this.size,
+        (y - 1) / this.size,
+        step,
+      ]);
+
+      this.training.labels.push(label);
+
+      if (isModelFit) {
+        await this.model.fit(
+          tf.tensor2d(this.training.inputs),
+          tf.tensor2d(this.training.labels),
+        );
+
         this.resetGame();
       }
 
       this.modelPredictId = setTimeout(this.modelPredict, this.actor.delay);
     },
 
-    async modelFit({ label }) {
-      let isRunInputs = true;
-      let { x, y } = this.actor;
-      // console.log('fit x, y', x, y);
-
-      // todo на следующей ячейке производится оценка.
-      // if (x === 1 && y === this.size + 1) {
-      //   isRunInputs = false;
-      //   console.log('ПОЧТИ!', x, y);
-      //   label = [0.5, 0.5, 0.5, 0.5];
-      //
-      //   // TODO !!!
-      //   this.training.inputs.push([
-      //     x / this.size,
-      //     (y - 1) / this.size,
-      //   ]);
-      // }
-
-      // todo на следующей ячейке производится оценка.
-      if (x === this.size + 1 && y === this.size + 1) {
-        isRunInputs = false;
-        console.log('ФИНИШ!');
-        label = [10, 10, 10, 10];
-
-        // TODO !!!
-        this.training.inputs.push([
-          (x - 1) / this.size,
-          (y - 1) / this.size,
-        ]);
-      }
-
-      if (isRunInputs) {
-        // todo до выяснения
-        if (x > 1) {
-          x -= 1;
-        }
-
-        if (y > 1) {
-          y -= 1;
-        }
-
-        this.training.inputs.push([
-          x / this.size,
-          y / this.size,
-        ]);
-      }
-
-      this.training.labels.push(label);
-
-      await this.model.fit(
-        tf.tensor2d(this.training.inputs),
-        tf.tensor2d(this.training.labels),
-      );
-    },
-
     resetGame() {
-      console.log('RESET GAME');
+      this.epoch += 1;
 
       this.actor = {
         ...this.actor,
-        x: 1,
-        y: 1,
+        x: 2,
+        y: 2,
+        step: 0,
       };
     },
 
     async modelPredict() {
-      const { x, y } = this.actor;
+      const { x, y, step } = this.actor;
 
       const prediction = this.model.predict(tf.tensor2d([
         [
           x / this.size,
           y / this.size,
+          step,
         ],
       ]));
 
       const [jumpTop, jumpRight, jumpBottom, jumpLeft] = await prediction.data();
-      console.log('T, R, B, L', jumpTop, jumpRight, jumpBottom, jumpLeft);
 
       let maximum = jumpTop;
       let action = 'jumpTop';
@@ -312,11 +314,8 @@ export default {
         action = 'jumpLeft';
       }
 
-      // console.log('maximum /', maximum, action);
-
-      if (maximum > this.threshold) {
-        this[action]();
-      }
+      this[action]();
+      this.actor.step += 1;
 
       this.modelPredictId = setTimeout(this.modelPredict, this.actor.delay);
     },
@@ -373,7 +372,6 @@ export default {
 
 .epoch {
   right: 0.5rem;
-  font-size: 1.4rem;
 }
 
 .cells {
@@ -387,6 +385,7 @@ export default {
   }
 
   .starting-checkpoint,
+  .middle-checkpoint,
   .finishing-checkpoint {
     display: flex;
     flex-direction: column;
@@ -394,16 +393,13 @@ export default {
     align-items: center;
     line-height: 0.9;
     font-weight: bold;
-  }
-
-  .starting-checkpoint {
-    background-color: yellowgreen;
-    outline: 0.5rem dashed yellowgreen;
-  }
-
-  .finishing-checkpoint {
     background-color: seagreen;
     outline: 0.5rem dashed seagreen;
+  }
+
+  .middle-checkpoint {
+    background-color: greenyellow;
+    outline: 0.5rem dashed greenyellow;
   }
 }
 
