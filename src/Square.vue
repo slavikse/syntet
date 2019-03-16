@@ -60,14 +60,6 @@ function getRandomArbitrary(min, max) {
   return Math.random() * (max - min) + min;
 }
 
-let maxActorStep = -1;
-
-// todo вместо 8 - точки подкрепления - на каждом следующем шаге,
-//   давать чуть больше подкрепления, чем на предыдущем,
-//   что будет поддталкивать пройти дальше.
-
-// todo помечать пройденные ячейки, как заблокированные и возвращать при сброче обратно.
-
 export default {
   name: 'Square',
 
@@ -99,7 +91,7 @@ export default {
         x: 2,
         y: 2,
         step: 0,
-        delay: 20,
+        delay: 0,
       },
 
       model: tf.sequential(),
@@ -120,8 +112,6 @@ export default {
   },
 
   async mounted() {
-    maxActorStep = this.field.length;
-
     this.setupModel();
 
     // Timer.
@@ -148,17 +138,17 @@ export default {
         // step - количество шагов, сделанных со стартовой позиции.
         inputShape: [3],
         activation: 'sigmoid',
-        units: 10,
+        units: 8,
       }));
 
-      // this.model.add(tf.layers.dense({
-      //   inputShape: [10],
-      //   activation: 'sigmoid',
-      //   units: 10,
-      // }));
+      this.model.add(tf.layers.dense({
+        inputShape: [8],
+        activation: 'sigmoid',
+        units: 8,
+      }));
 
       this.model.add(tf.layers.dense({
-        inputShape: [10],
+        inputShape: [8],
         activation: 'sigmoid',
         // [north, east, south, west] - Прогноз стороны для передвижения.
         units: 4,
@@ -186,7 +176,7 @@ export default {
       this.style.setProperty('--player-row', y);
 
       // TODO
-      if (this.actor.step >= maxActorStep) {
+      if (this.actor.step >= this.field.length) {
         clearTimeout(this.modelPredictId);
         await this.modelFit();
         this.modelPredictId = setTimeout(this.modelPredict, this.actor.delay);
@@ -203,10 +193,10 @@ export default {
 
       if (cell === 0) {
         label = [
-          getRandomArbitrary(-0.5, 0.2),
-          getRandomArbitrary(-0.5, 0.2),
-          getRandomArbitrary(-0.5, 0.2),
-          getRandomArbitrary(-0.5, 0.2),
+          getRandomArbitrary(-0.5, -0.3),
+          getRandomArbitrary(-0.5, -0.3),
+          getRandomArbitrary(-0.5, -0.3),
+          getRandomArbitrary(-0.5, -0.3),
         ];
 
         isModelFit = true;
@@ -223,19 +213,19 @@ export default {
 
       if (cell === 7) {
         label = [
-          getRandomArbitrary(0.1, 0.3),
-          getRandomArbitrary(0.1, 0.3),
-          getRandomArbitrary(0.1, 0.3),
-          getRandomArbitrary(0.1, 0.3),
+          getRandomArbitrary(0.2, 0.3),
+          getRandomArbitrary(0.2, 0.3),
+          getRandomArbitrary(0.2, 0.3),
+          getRandomArbitrary(0.2, 0.3),
         ];
       }
 
       if (cell === 8) {
         label = [
-          getRandomArbitrary(1, 1.4),
-          getRandomArbitrary(1, 1.4),
-          getRandomArbitrary(1, 1.4),
-          getRandomArbitrary(1, 1.4),
+          getRandomArbitrary(0.6, 0.8),
+          getRandomArbitrary(0.6, 0.8),
+          getRandomArbitrary(0.6, 0.8),
+          getRandomArbitrary(0.6, 0.8),
         ];
       }
 
@@ -258,7 +248,7 @@ export default {
       this.training.inputs.push([
         (x - 1) / this.size,
         (y - 1) / this.size,
-        step / maxActorStep,
+        step / this.field.length,
       ]);
 
       this.training.labels.push(label);
@@ -299,7 +289,7 @@ export default {
         [
           x / this.size,
           y / this.size,
-          step / maxActorStep,
+          step / this.field.length,
         ],
       ]));
 
@@ -377,11 +367,15 @@ export default {
 }
 
 .time {
-  left: 0.5rem;
+  margin-top: 5rem;
+  width: 100%;
+  text-align: center;
 }
 
 .epoch {
-  right: 0.5rem;
+  margin-top: 7rem;
+  width: 100%;
+  text-align: center;
 }
 
 .cells {
