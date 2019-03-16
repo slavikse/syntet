@@ -5,7 +5,7 @@
     </div>
 
     <div class="stat epoch">
-      Шаг: {{ actor.step }} | Эпоха: {{ epoch }}
+      Шаг: {{ actor.step }} | Эпоха: {{ epoch }} | Побед: {{ win }}
     </div>
 
     <div
@@ -60,7 +60,7 @@ function getRandomArbitrary(min, max) {
   return Math.random() * (max - min) + min;
 }
 
-// let maxActorStep = -1;
+let maxActorStep = -1;
 
 // todo вместо 8 - точки подкрепления - на каждом следующем шаге,
 //   давать чуть больше подкрепления, чем на предыдущем,
@@ -104,6 +104,7 @@ export default {
 
       model: tf.sequential(),
       epoch: 0,
+      win: 0,
       training: {
         // [x, y, step] - Нормализованные координаты актёра.
         // step - количество шагов, сделанных со стартовой позиции.
@@ -118,13 +119,8 @@ export default {
     };
   },
 
-  watch: {
-    'actor.x': 'setPlayerStyleProperties',
-    'actor.y': 'setPlayerStyleProperties',
-  },
-
-  mounted() {
-    // maxActorStep = this.field.length ** 2;
+  async mounted() {
+    maxActorStep = this.field.length;
 
     this.setupModel();
 
@@ -137,7 +133,8 @@ export default {
     this.style = this.$refs.Square.style;
 
     this.settingPlayingField();
-    this.setPlayerStyleProperties();
+    await this.setPlayerStyleProperties();
+    this.checkExit();
   },
 
   destroyed() {
@@ -154,11 +151,11 @@ export default {
         units: 10,
       }));
 
-      this.model.add(tf.layers.dense({
-        inputShape: [10],
-        activation: 'sigmoid',
-        units: 10,
-      }));
+      // this.model.add(tf.layers.dense({
+      //   inputShape: [10],
+      //   activation: 'sigmoid',
+      //   units: 10,
+      // }));
 
       this.model.add(tf.layers.dense({
         inputShape: [10],
@@ -182,18 +179,21 @@ export default {
       this.style.setProperty('--quantity-rows', this.quantityRows);
     },
 
-    setPlayerStyleProperties() {
+    async setPlayerStyleProperties() {
       const { x, y } = this.actor;
 
       this.style.setProperty('--player-column', x);
       this.style.setProperty('--player-row', y);
 
-      this.checkExit();
+      // TODO
+      if (this.actor.step >= maxActorStep) {
+        clearTimeout(this.modelPredictId);
+        await this.modelFit();
+        this.modelPredictId = setTimeout(this.modelPredict, this.actor.delay);
+      }
     },
 
     async checkExit() {
-      clearTimeout(this.modelPredictId);
-
       const { x, y, step } = this.actor;
       const cell = this.field[(x - 1) + (y - 1) * this.size];
 
@@ -243,36 +243,43 @@ export default {
         console.log('ФИНИШ!', x, y);
 
         label = [
-          getRandomArbitrary(2, 3),
-          getRandomArbitrary(2, 3),
-          getRandomArbitrary(2, 3),
-          getRandomArbitrary(2, 3),
+          getRandomArbitrary(1.5, 2),
+          getRandomArbitrary(1.5, 2),
+          getRandomArbitrary(1.5, 2),
+          getRandomArbitrary(1.5, 2),
         ];
+
+        this.win += 1;
+        isModelFit = true;
       }
 
-      console.log('cell', cell, 'label', label);
+      // console.log('cell', cell, 'label', label);
 
       this.training.inputs.push([
         (x - 1) / this.size,
         (y - 1) / this.size,
-        step,
+        step / maxActorStep,
       ]);
 
       this.training.labels.push(label);
 
       if (isModelFit) {
-        await this.model.fit(
-          tf.tensor2d(this.training.inputs),
-          tf.tensor2d(this.training.labels),
-        );
-
-        this.resetGame();
+        await this.modelFit();
       }
 
       this.modelPredictId = setTimeout(this.modelPredict, this.actor.delay);
     },
 
-    resetGame() {
+    async modelFit() {
+      await this.model.fit(
+        tf.tensor2d(this.training.inputs),
+        tf.tensor2d(this.training.labels),
+      );
+
+      await this.resetGame();
+    },
+
+    async resetGame() {
       this.epoch += 1;
 
       this.actor = {
@@ -281,6 +288,8 @@ export default {
         y: 2,
         step: 0,
       };
+
+      await this.setPlayerStyleProperties();
     },
 
     async modelPredict() {
@@ -290,7 +299,7 @@ export default {
         [
           x / this.size,
           y / this.size,
-          step,
+          step / maxActorStep,
         ],
       ]));
 
@@ -317,7 +326,8 @@ export default {
       this[action]();
       this.actor.step += 1;
 
-      this.modelPredictId = setTimeout(this.modelPredict, this.actor.delay);
+      await this.setPlayerStyleProperties();
+      this.checkExit();
     },
 
     jumpTop() {
