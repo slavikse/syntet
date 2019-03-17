@@ -147,7 +147,7 @@ export default {
         prediction.data().then(([l0, l1, l2, l3]) => {
           console.log(l0, l1, l2, l3);
 
-          const threshold = 0.5;
+          let threshold = 0.5;
 
           let maximum = l0;
           let lane = 0;

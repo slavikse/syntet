@@ -1,42 +1,44 @@
 <template>
   <div>
     <div class="stat time">
-      Прошло секунд: {{ startTime }}
+      Секунд прошло: {{ startTime }}
     </div>
 
     <div class="stat epoch">
-      Шаг: {{ actor.step }} | Эпоха: {{ epoch }} | Побед: {{ win }}
+      Шаг: {{ actor.step }} | Эпох: {{ epoch }} | Побед: {{ win }}
     </div>
 
     <div
       ref="Square"
       class="Square"
       tabindex="0"
-      @keyup.up="jumpTop"
-      @keyup.right="jumpRight"
-      @keyup.down="jumpBottom"
-      @keyup.left="jumpLeft"
+      @keyup.up="handJumpTop"
+      @keyup.right="handJumpRight"
+      @keyup.down="handJumpBottom"
+      @keyup.left="handJumpLeft"
     >
       <div class="cells field">
         <div
-          v-for="(cell, index) in field"
+          v-for="(cellValue, index) in field"
           :key="index"
-          :class="['cell', {
-            'available': cell === 1,
-            'starting-checkpoint': cell === 7,
-            'middle-checkpoint': cell === 8,
-            'finishing-checkpoint': cell === 9,
-          }]"
+          :class="['cell', { 'available': cellValue === 2 }]"
         >
           <div
-            v-if="cell === 7"
+            v-if="cellValue === 1"
             class="starting-checkpoint"
           >
             СТАРТ
           </div>
 
           <div
-            v-if="cell === 9"
+            v-if="cellValue === 3"
+            class="middle-checkpoint"
+          >
+            БЕГИ
+          </div>
+
+          <div
+            v-if="cellValue === 4"
             class="finishing-checkpoint"
           >
             ФИНИШ
@@ -46,7 +48,15 @@
 
       <div class="players field">
         <div class="player">
-          🐥
+          <div class="actor">
+            🐥
+          </div>
+
+          <!-- Усики сканирующие, что там дальше. -->
+          <div class="antenna jump-top" />
+          <div class="antenna jump-right" />
+          <div class="antenna jump-bottom" />
+          <div class="antenna jump-left" />
         </div>
       </div>
     </div>
@@ -56,9 +66,26 @@
 <script>
 import * as tf from '@tensorflow/tfjs';
 
-function getRandomArbitrary(min, max) {
-  return Math.random() * (max - min) + min;
-}
+// function getRandomArbitrary([min, max]) {
+//   return Math.random() * (max - min) + min;
+// }
+
+const automaticControl = true;
+
+// Максимальное значение ячейки.
+const maxCellValues = 4;
+// Минимальное количество ходов для выигрыша.
+const maxStep = 32; // 8
+
+const field = [
+  0, 0, 0, 0, 0, 0, 0,
+  0, 1, 0, 0, 0, 0, 0,
+  0, 2, 0, 0, 0, 0, 0,
+  0, 2, 0, 0, 0, 0, 0,
+  0, 2, 0, 0, 0, 0, 0,
+  0, 3, 2, 2, 2, 4, 0,
+  0, 0, 0, 0, 0, 0, 0,
+];
 
 export default {
   name: 'Square',
@@ -72,17 +99,10 @@ export default {
       // Игровая область обязательно квадратной формы.
       // 0 - Запретная территория.
       // 1 - Проходная территория.
-      // 8 - Начальная точка.
-      // 9 - Финишная точка.
-      field: [
-        0, 0, 0, 0, 0, 0, 0,
-        0, 7, 0, 0, 0, 0, 0,
-        0, 1, 0, 0, 0, 0, 0,
-        0, 1, 0, 0, 0, 0, 0,
-        0, 1, 0, 0, 0, 0, 0,
-        0, 8, 1, 1, 1, 9, 0,
-        0, 0, 0, 0, 0, 0, 0,
-      ],
+      // 2 - Начальная точка.
+      // 3 - Промежуточная точка.
+      // 4 - Финишная точка.
+      field,
       size: -1,
       quantityColumns: -1,
       quantityRows: -1,
@@ -91,8 +111,12 @@ export default {
         x: 2,
         y: 2,
         step: 0,
-        delay: 0,
+        cellValueTop: 0,
+        cellValueRight: 0,
+        cellValueBottom: 0,
+        cellValueLeft: 0,
       },
+      actorDelay: 1000,
 
       model: tf.sequential(),
       epoch: 0,
@@ -107,7 +131,6 @@ export default {
         // [0, 0, 0, 1] - Пойти на запад (west).
         labels: [],
       },
-      modelPredictId: undefined,
     };
   },
 
@@ -123,39 +146,44 @@ export default {
     this.style = this.$refs.Square.style;
 
     this.settingPlayingField();
-    await this.setPlayerStyleProperties();
-    this.checkExit();
-  },
 
-  destroyed() {
-    clearTimeout(this.modelPredictId);
+    await this.setPlayerStyleProperties();
+
+    if (automaticControl) {
+      await this.modelPredict();
+    }
+
+    this.checkExit();
   },
 
   methods: {
     setupModel() {
       this.model.add(tf.layers.dense({
-        // [x, y, step] - Нормализованные координаты актёра.
-        // step - количество шагов, сделанных со стартовой позиции.
-        inputShape: [3],
+        // [
+        //   x, y, // Нормализованные координаты актёра.
+        //   step, // Количество шагов, сделанных от стартовой позиции.
+        //   4 усика // Направлены во все 4 стороны от актёра.
+        // ]
+        inputShape: [3 + 4],
         activation: 'sigmoid',
-        units: 8,
+        units: 32,
       }));
 
-      this.model.add(tf.layers.dense({
-        inputShape: [8],
-        activation: 'sigmoid',
-        units: 8,
-      }));
+      // this.model.add(tf.layers.dense({
+      //   inputShape: [32],
+      //   activation: 'sigmoid',
+      //   units: 32,
+      // }));
 
       this.model.add(tf.layers.dense({
-        inputShape: [8],
+        inputShape: [32],
         activation: 'sigmoid',
         // [north, east, south, west] - Прогноз стороны для передвижения.
         units: 4,
       }));
 
       this.model.compile({
-        optimizer: tf.train.adam(0.1),
+        optimizer: tf.train.adam(0.01),
         loss: 'meanSquaredError',
       });
     },
@@ -175,80 +203,85 @@ export default {
       this.style.setProperty('--player-column', x);
       this.style.setProperty('--player-row', y);
 
-      // TODO
-      if (this.actor.step >= this.field.length) {
-        clearTimeout(this.modelPredictId);
+      if (this.actor.step === maxStep) {
         await this.modelFit();
-        this.modelPredictId = setTimeout(this.modelPredict, this.actor.delay);
       }
     },
 
     async checkExit() {
-      const { x, y, step } = this.actor;
-      const cell = this.field[(x - 1) + (y - 1) * this.size];
+      const { x, y } = this.actor;
+      // Смещение на -1: Сетка начинается с 1, а значения в массиве начинаются с 0.
+      const normalY = y - 1;
+      const normalX = x - 1;
 
-      let label = [0, 0, 0, 0];
+      const cellValue = this.field[normalY * this.size + normalX];
+      // this.field[normalY * this.size + normalX] = 0;
+
+      // Очень важно передавать значения в label[] в таком же порядке!
+      const [
+        cellValueTop,
+        cellValueRight,
+        cellValueBottom,
+        cellValueLeft,
+      ] = this.getAntennaCellValues({ normalX, normalY });
+
+      this.actor = {
+        ...this.actor,
+        cellValueTop,
+        cellValueRight,
+        cellValueBottom,
+        cellValueLeft,
+      };
+
+      const label = [
+        cellValueTop,
+        cellValueRight,
+        cellValueBottom,
+        cellValueLeft,
+      ];
+
       // Тренировать на накопленных training.inputs при выходе за границы.
       let isModelFit = false;
 
-      if (cell === 0) {
-        label = [
-          getRandomArbitrary(-0.5, -0.3),
-          getRandomArbitrary(-0.5, -0.3),
-          getRandomArbitrary(-0.5, -0.3),
-          getRandomArbitrary(-0.5, -0.3),
-        ];
+      switch (cellValue) {
+        case 0:
+          isModelFit = true;
+          break;
 
-        isModelFit = true;
+        case 1:
+          break;
+
+        case 2:
+        case 3:
+          this.actor.step += 1;
+          break;
+
+        case 4:
+          isModelFit = true;
+          console.log('ФИНИШ!', x, y);
+
+          this.actor.step += 1;
+          this.win += 1;
+          break;
+
+        default:
+          console.log('Опс!');
       }
 
-      if (cell === 1) {
-        label = [
-          getRandomArbitrary(0.5, 0.8),
-          getRandomArbitrary(0.5, 0.8),
-          getRandomArbitrary(0.5, 0.8),
-          getRandomArbitrary(0.5, 0.8),
-        ];
+      if (!automaticControl) {
+        // Для проверки, куда актёр пришёл.
+        console.log(`x: ${x} | y: ${y} | step: ${this.actor.step} | cellValue: ${cellValue} | label: ${label}`);
+        console.log(cellValueTop, cellValueRight, cellValueBottom, cellValueLeft);
       }
-
-      if (cell === 7) {
-        label = [
-          getRandomArbitrary(0.2, 0.3),
-          getRandomArbitrary(0.2, 0.3),
-          getRandomArbitrary(0.2, 0.3),
-          getRandomArbitrary(0.2, 0.3),
-        ];
-      }
-
-      if (cell === 8) {
-        label = [
-          getRandomArbitrary(0.6, 0.8),
-          getRandomArbitrary(0.6, 0.8),
-          getRandomArbitrary(0.6, 0.8),
-          getRandomArbitrary(0.6, 0.8),
-        ];
-      }
-
-      if (cell === 9) {
-        console.log('ФИНИШ!', x, y);
-
-        label = [
-          getRandomArbitrary(1.5, 2),
-          getRandomArbitrary(1.5, 2),
-          getRandomArbitrary(1.5, 2),
-          getRandomArbitrary(1.5, 2),
-        ];
-
-        this.win += 1;
-        isModelFit = true;
-      }
-
-      // console.log('cell', cell, 'label', label);
 
       this.training.inputs.push([
-        (x - 1) / this.size,
-        (y - 1) / this.size,
-        step / this.field.length,
+        x / this.size,
+        y / this.size,
+        this.actor.step / maxStep,
+        cellValueTop / maxCellValues,
+        cellValueRight / maxCellValues,
+        cellValueBottom / maxCellValues,
+        cellValueLeft / maxCellValues,
       ]);
 
       this.training.labels.push(label);
@@ -257,7 +290,30 @@ export default {
         await this.modelFit();
       }
 
-      this.modelPredictId = setTimeout(this.modelPredict, this.actor.delay);
+      if (automaticControl) {
+        await this.modelPredict();
+      }
+    },
+
+    // Получение значения ячейки от 1 до 4.
+    getAntennaCellValues({ normalX, normalY }) {
+      // || 0 - когда выходит на запретную зону, то дальше нет пути, считаем, что тоже запретная.
+      const top = this.field[(normalY - 1) * this.size + normalX] || 0;
+      const right = this.field[normalY * this.size + (normalX + 1)] || 0;
+      const bottom = this.field[(normalY + 1) * this.size + normalX] || 0;
+      const left = this.field[normalY * this.size + (normalX - 1)] || 0;
+
+      return [top, right, bottom, left];
+    },
+
+    // Возвращает 2 значения, для вычисления случайного числа между ними.
+    checkCellValue(cellValue) {
+      // Означает, что в ячейку можно наступить.
+      if (cellValue > 0) {
+        return [0.4, 0.6];
+      }
+
+      return [0, 0];
     },
 
     async modelFit() {
@@ -277,23 +333,53 @@ export default {
         x: 2,
         y: 2,
         step: 0,
+        cellValueTop: 0,
+        cellValueRight: 0,
+        cellValueBottom: 0,
+        cellValueLeft: 0,
       };
 
+      // this.field = JSON.parse(JSON.stringify(field));
+
       await this.setPlayerStyleProperties();
+
+      if (automaticControl) {
+        await this.modelPredict();
+      }
+
+      this.checkExit();
     },
 
     async modelPredict() {
-      const { x, y, step } = this.actor;
+      const {
+        x,
+        y,
+        step,
+        cellValueTop,
+        cellValueRight,
+        cellValueBottom,
+        cellValueLeft,
+      } = this.actor;
 
       const prediction = this.model.predict(tf.tensor2d([
         [
           x / this.size,
           y / this.size,
-          step / this.field.length,
+          step / maxStep,
+          cellValueTop / maxCellValues,
+          cellValueRight / maxCellValues,
+          cellValueBottom / maxCellValues,
+          cellValueLeft / maxCellValues,
         ],
       ]));
 
       const [jumpTop, jumpRight, jumpBottom, jumpLeft] = await prediction.data();
+      console.log(
+        'Top', jumpTop.toFixed(4),
+        'Right', jumpRight.toFixed(4),
+        'Bottom', jumpBottom.toFixed(4),
+        'Left', jumpLeft.toFixed(4),
+      );
 
       let maximum = jumpTop;
       let action = 'jumpTop';
@@ -314,7 +400,6 @@ export default {
       }
 
       this[action]();
-      this.actor.step += 1;
 
       await this.setPlayerStyleProperties();
       this.checkExit();
@@ -334,6 +419,31 @@ export default {
 
     jumpLeft() {
       this.actor.x -= 1;
+    },
+
+    // Специально для ручного управления.
+    async handJumpTop() {
+      this.jumpTop();
+      await this.setPlayerStyleProperties();
+      this.checkExit();
+    },
+
+    async handJumpRight() {
+      this.jumpRight();
+      await this.setPlayerStyleProperties();
+      this.checkExit();
+    },
+
+    async handJumpBottom() {
+      this.jumpBottom();
+      await this.setPlayerStyleProperties();
+      this.checkExit();
+    },
+
+    async handJumpLeft() {
+      this.jumpLeft();
+      await this.setPlayerStyleProperties();
+      this.checkExit();
     },
   },
 };
@@ -395,6 +505,7 @@ export default {
     flex-direction: column;
     justify-content: center;
     align-items: center;
+    width: 100%;
     line-height: 0.9;
     font-weight: bold;
     background-color: seagreen;
@@ -402,6 +513,8 @@ export default {
   }
 
   .middle-checkpoint {
+    line-height: 1;
+    color: green;
     background-color: greenyellow;
     outline: 0.5rem dashed greenyellow;
   }
@@ -418,14 +531,44 @@ export default {
   position: absolute;
 
   .player {
+    position: relative;
     grid-row: var(--player-row);
     grid-column: var(--player-column);
     display: flex;
     justify-content: center;
     align-items: center;
-    font-size: 2.4rem;
     background-color: yellow;
     outline: 0.5rem dashed yellow;
+
+    .actor {
+      font-size: 2.4rem;
+    }
+
+    .antenna {
+      position: absolute;
+      height: 2px;
+      width: 3rem;
+      background-color: white;
+    }
+
+    .jump-top {
+      top: -2rem;
+      transform: rotate(90deg);
+    }
+
+    .jump-right {
+      right: -3.5rem;
+      transform: rotate(180deg);
+    }
+
+    .jump-bottom {
+      bottom: -2rem;
+      transform: rotate(270deg);
+    }
+
+    .jump-left {
+      left: -3.5rem;
+    }
   }
 }
 </style>
