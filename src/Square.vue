@@ -380,10 +380,7 @@ export default {
 };
 </script>
 
-<style
-  lang='scss'
-  scoped
->
+<style scoped>
 .Square {
   --quantity-rows: -1;
   --quantity-columns: -1;
@@ -420,37 +417,38 @@ export default {
 }
 
 .cells {
-  .cell {
-    position: relative;
-    display: flex;
-    background-color: #222;
-  }
+}
 
-  .available {
-    background-color: darkcyan;
-  }
+.cell {
+  position: relative;
+  display: flex;
+  background-color: #222;
+}
 
-  .starting-checkpoint,
-  .middle-checkpoint,
-  .finishing-checkpoint {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    width: 100%;
-    line-height: 0.9;
-    font-size: 0.7rem;
-    font-weight: bold;
-    background-color: seagreen;
-    outline: 0.5rem dashed seagreen;
-  }
+.available {
+  background-color: darkcyan;
+}
 
-  .middle-checkpoint {
-    line-height: 1;
-    color: green;
-    background-color: greenyellow;
-    outline: 0.2rem dashed greenyellow;
-  }
+.starting-checkpoint,
+.middle-checkpoint,
+.finishing-checkpoint {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  line-height: 0.9;
+  font-size: 0.7rem;
+  font-weight: bold;
+  background-color: seagreen;
+  outline: 0.5rem dashed seagreen;
+}
+
+.middle-checkpoint {
+  line-height: 1;
+  color: green;
+  background-color: greenyellow;
+  outline: 0.2rem dashed greenyellow;
 }
 
 .field {
@@ -462,46 +460,46 @@ export default {
 
 .players {
   position: absolute;
+}
 
-  .player {
-    position: relative;
-    grid-row: var(--player-row);
-    grid-column: var(--player-column);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    background-color: yellow;
-    outline: 0.5rem dashed yellow;
+.player {
+  position: relative;
+  grid-row: var(--player-row);
+  grid-column: var(--player-column);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: yellow;
+  outline: 0.5rem dashed yellow;
+}
 
-    .actor {
-      font-size: 2.4rem;
-    }
+.actor {
+  font-size: 2.4rem;
+}
 
-    .antenna {
-      position: absolute;
-      height: 2px;
-      width: 1.5rem;
-      background-color: brown;
-    }
+.antenna {
+  position: absolute;
+  height: 2px;
+  width: 1.5rem;
+  background-color: brown;
+}
 
-    .jump-top {
-      top: -1.3rem;
-      transform: rotate(90deg);
-    }
+.jump-top {
+  top: -1.3rem;
+  transform: rotate(90deg);
+}
 
-    .jump-right {
-      right: -2rem;
-      transform: rotate(180deg);
-    }
+.jump-right {
+  right: -2rem;
+  transform: rotate(180deg);
+}
 
-    .jump-bottom {
-      bottom: -1.3rem;
-      transform: rotate(270deg);
-    }
+.jump-bottom {
+  bottom: -1.3rem;
+  transform: rotate(270deg);
+}
 
-    .jump-left {
-      left: -2rem;
-    }
-  }
+.jump-left {
+  left: -2rem;
 }
 </style>
