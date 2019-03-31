@@ -1,11 +1,9 @@
 <template>
   <div>
-    <div class="stat time">
-      Секунд: {{ duration }}
-    </div>
-
     <div class="stat generation">
-      Поколений: {{ generation }} | Побед: {{ win }}
+      Живых: {{ aliveCount }} | Поколений: {{ generation }} | Побед: {{ win }}
+      <br>
+      Шагов: {{ stepCount }} | Максимальное значение ячейки: {{ maximumCellValue }}
     </div>
 
     <div
@@ -72,7 +70,9 @@ import * as tf from '@tensorflow/tfjs';
 import cloneDeep from 'clone-deep';
 
 const actorsDefault = [];
-const actorsCount = 10;
+const actorsCount = 1000;
+// Каждый N будет случайной вероятностью выбора стороны.
+const eachNumber = 100;
 
 /* eslint-disable no-plusplus */
 for (let i = 0; i < actorsCount; i++) {
@@ -90,9 +90,6 @@ export default {
 
   data() {
     return {
-      time: Date(),
-      duration: 0,
-
       model: tf.sequential(),
       // Очищаемое поколение всех актёров перед следующим поколением.
       preTraining: {
@@ -114,7 +111,9 @@ export default {
       win: 0,
 
       actors: [],
+      maximumCellValue: 0,
 
+      fieldStyle: undefined,
       // Игровая область обязательно квадратной формы, для Math.sqrt(this.field.length).
       // Обязательно между доступным путём, должно быть 2 запретных ячейки из за усиков.
       // 0 - Запретная территория.
@@ -137,22 +136,25 @@ export default {
         0,  0, 24, 25, 26, 27, 28, 29, 30, 31,  0,  0,  0,
         0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
       ],
-      fieldStyle: undefined,
       // @formatter:on
       /* eslint-enable no-multi-spaces */
       maxCellValues: 45,
-      maxStep: 45 * 3,
+      maxStep: 45 * 2,
       size: -1,
     };
   },
 
-  async mounted() {
-    // Timer.
-    setInterval(() => {
-      this.time = Date();
-      this.duration += 1;
-    }, 1000);
+  computed: {
+    aliveCount() {
+      return this.actors.filter(({ alive }) => alive).length || 0;
+    },
 
+    stepCount() {
+      return Math.max(0, ...this.actors.filter(({ alive }) => alive).map(({ step }) => step));
+    },
+  },
+
+  async mounted() {
     this.fieldSetting();
     this.setupModel();
 
@@ -184,13 +186,19 @@ export default {
 
       this.model.add(tf.layers.dense({
         activation: 'sigmoid',
+        units: 256,
+      }));
+
+      this.model.add(tf.layers.dense({
+        activation: 'sigmoid',
         // [north, east, south, west] - Прогноз стороны для передвижения.
         units: 4,
       }));
 
       this.model.compile({
-        optimizer: tf.train.adam(0.005),
+        optimizer: tf.train.adam(0.001),
         loss: 'meanSquaredError',
+        metrics: ['accuracy'],
       });
     },
 
@@ -205,8 +213,7 @@ export default {
     },
 
     async modelPredict() {
-      /* eslint-disable no-restricted-syntax */
-      for await (const actor of this.actors) {
+      await Promise.all(this.actors.map(async (actor, index) => {
         if (actor.alive) {
           const prediction = await this.model.predict(tf.tensor2d([
             [
@@ -216,7 +223,7 @@ export default {
             ],
           ])).data();
 
-          const action = this.getAction(prediction);
+          const action = this.getAction(prediction, index);
           this[action](actor);
 
           await this.availabilityCheck(actor);
@@ -226,14 +233,22 @@ export default {
         // await new Promise((resolve) => {
         //   setTimeout(() => {
         //     resolve();
-        //   }, 500);
+        //   }, 100);
         // });
-      }
+      }));
 
       await this.modelPredict();
     },
 
-    getAction([jumpTop, jumpRight, jumpBottom, jumpLeft]) {
+    getAction([jumpTop, jumpRight, jumpBottom, jumpLeft], index) {
+      // Сбрасывает некоторые решения, делая их случайными.
+      if (index % eachNumber === 0) {
+        jumpTop = Math.random();
+        jumpRight = Math.random();
+        jumpBottom = Math.random();
+        jumpLeft = Math.random();
+      }
+
       // console.log(
       //   'Top', jumpTop.toFixed(10),
       //   'Right', jumpRight.toFixed(10),
@@ -285,17 +300,15 @@ export default {
       const cellValue = this.field[normalY * this.size + normalX];
 
       // Очень важно передавать значения в label[] в таком же порядке!
-      const [top, right, bottom, left] = this.getAntennaCellValues({ normalX, normalY });
-
-      const label = [
-        top / this.maxCellValues,
-        right / this.maxCellValues,
-        bottom / this.maxCellValues,
-        left / this.maxCellValues,
-      ];
+      const label = this.getAntennaCellValues({ normalX, normalY });
 
       // Сброс при успешном прохождении.
       let isReset = false;
+
+      // Ввод максимального шага.
+      if (cellValue > this.maximumCellValue) {
+        this.maximumCellValue = cellValue;
+      }
 
       switch (true) {
         case cellValue === 0:
@@ -324,10 +337,6 @@ export default {
         default:
       }
 
-      // Для проверки, куда актёр пришёл.
-      // console.log(`x: ${x}, y: ${y}, s: ${this.actor.step}, v: ${cellValue}, l: ${label}`);
-      // console.log(`top: ${top}, right: ${right}, bottom: ${bottom}, left: ${left}`);
-
       this.savePreTraining({ actor, label });
 
       const living = this.actors.filter(({ alive }) => alive).length;
@@ -349,7 +358,12 @@ export default {
       const bottom = this.field[(normalY + 1) * this.size + normalX] || 0;
       const left = this.field[normalY * this.size + (normalX - 1)] || 0;
 
-      return [top, right, bottom, left];
+      return [
+        top / this.maxCellValues,
+        right / this.maxCellValues,
+        bottom / this.maxCellValues,
+        left / this.maxCellValues,
+      ];
     },
 
     savePreTraining({ actor, label }) {
@@ -363,31 +377,19 @@ export default {
     },
 
     async modelFit() {
-      let maxStep = 0;
-      let bestIndex = 0;
+      const {
+        inputs1,
+        labels1,
 
-      // todo выбирать несколько лучших для обучения.
-      // 3 элемент при сохранении в savePreTraining.
-      this.preTraining.inputs.forEach(([, , step], index) => {
-        // todo для нахождения одного лучшего.
-        if (step > maxStep) {
-          maxStep = step;
-          bestIndex = index;
-        }
-      });
+        inputs2,
+        labels2,
 
-      // console.log('maxStep', maxStep);
-      // console.log('bestIndex', bestIndex);
-      // console.log('preTraining.inputs', this.preTraining.inputs[bestIndex]);
-      // console.log('preTraining.labels', this.preTraining.labels[bestIndex]);
-      const preInputs = this.preTraining.inputs.slice(bestIndex, 1);
-      const preLabels = this.preTraining.labels.slice(bestIndex, 1);
-      // console.log('preInputs', preInputs);
-      // console.log('preLabels', preLabels);
-      this.preTraining = { inputs: [], labels: [] };
+        inputs3,
+        labels3,
+      } = this.getTheBest();
 
-      this.training.inputs.push(...preInputs);
-      this.training.labels.push(...preLabels);
+      this.training.inputs.push(...inputs1, ...inputs2, ...inputs3);
+      this.training.labels.push(...labels1, ...labels2, ...labels3);
 
       await this.model.fit(
         tf.tensor2d(this.training.inputs),
@@ -396,6 +398,76 @@ export default {
 
       this.generation += 1;
       await this.actorsReset();
+    },
+
+    getTheBest() {
+      let third = 0;
+      let second = 0;
+      let first = 0;
+
+      let thirdIndex = 0;
+      let secondIndex = 0;
+      let firstIndex = 0;
+
+      this.preTraining.inputs.forEach(([, , step], index) => {
+        switch (true) {
+          case step > first:
+            third = second;
+            second = first;
+            first = step;
+
+            thirdIndex = secondIndex;
+            secondIndex = firstIndex;
+            firstIndex = index;
+            break;
+
+          case step > second:
+            third = second;
+            second = step;
+
+            thirdIndex = secondIndex;
+            secondIndex = index;
+            break;
+
+          case step > third:
+            third = step;
+
+            thirdIndex = index;
+            break;
+
+          default:
+        }
+      });
+
+      // console.log('third', third);
+      // console.log('second', second);
+      // console.log('first', first);
+      //
+      // console.log('thirdIndex', thirdIndex);
+      // console.log('secondIndex', secondIndex);
+      // console.log('firstIndex', firstIndex);
+
+      const inputs1 = this.preTraining.inputs.slice(first, first + 1);
+      const labels1 = this.preTraining.labels.slice(firstIndex, firstIndex + 1);
+
+      const inputs2 = this.preTraining.inputs.slice(second, second + 1);
+      const labels2 = this.preTraining.labels.slice(secondIndex, secondIndex + 1);
+
+      const inputs3 = this.preTraining.inputs.slice(third, third + 1);
+      const labels3 = this.preTraining.labels.slice(thirdIndex, thirdIndex + 1);
+
+      this.preTraining = { inputs: [], labels: [] };
+
+      return {
+        inputs1,
+        labels1,
+
+        inputs2,
+        labels2,
+
+        inputs3,
+        labels3,
+      };
     },
   },
 };
