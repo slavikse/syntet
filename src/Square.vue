@@ -70,9 +70,9 @@ import * as tf from '@tensorflow/tfjs';
 import cloneDeep from 'clone-deep';
 
 const actorsDefault = [];
-const actorsCount = 1000;
-// Каждый N будет случайной вероятностью выбора стороны.
-const eachNumber = 100;
+const actorsCount = 3000;
+// Каждый N будет исследователем.
+const eachNumber = 300;
 
 /* eslint-disable no-plusplus */
 for (let i = 0; i < actorsCount; i++) {
@@ -176,18 +176,18 @@ export default {
         // Описание в training.inputs.
         inputShape: [3],
         activation: 'sigmoid',
-        units: 256,
+        units: 12,
       }));
 
-      this.model.add(tf.layers.dense({
-        activation: 'sigmoid',
-        units: 256,
-      }));
+      // this.model.add(tf.layers.dense({
+      //   activation: 'sigmoid',
+      //   units: 64,
+      // }));
 
-      this.model.add(tf.layers.dense({
-        activation: 'sigmoid',
-        units: 256,
-      }));
+      // this.model.add(tf.layers.dense({
+      //   activation: 'sigmoid',
+      //   units: 128,
+      // }));
 
       this.model.add(tf.layers.dense({
         activation: 'sigmoid',
@@ -196,9 +196,9 @@ export default {
       }));
 
       this.model.compile({
-        optimizer: tf.train.adam(0.001),
+        optimizer: tf.train.adam(0.01),
         loss: 'meanSquaredError',
-        metrics: ['accuracy'],
+        // metrics: ['accuracy'],
       });
     },
 
@@ -323,11 +323,9 @@ export default {
           actor.step += 1;
           break;
 
-        // todo особый
         case cellValue === this.maxCellValues:
           actor.alive = false;
           isReset = true;
-          // todo выбирать лучших для обучения
           console.log('ФИНИШ!', actor.x, actor.y);
 
           actor.step += 1;
@@ -391,6 +389,13 @@ export default {
       this.training.inputs.push(...inputs1, ...inputs2, ...inputs3);
       this.training.labels.push(...labels1, ...labels2, ...labels3);
 
+      // await this.model.fit(
+      //   tf.tensor2d(this.preTraining.inputs),
+      //   tf.tensor2d(this.preTraining.labels),
+      // );
+
+      this.preTraining = { inputs: [], labels: [] };
+
       await this.model.fit(
         tf.tensor2d(this.training.inputs),
         tf.tensor2d(this.training.labels),
@@ -442,7 +447,7 @@ export default {
       // console.log('third', third);
       // console.log('second', second);
       // console.log('first', first);
-      //
+
       // console.log('thirdIndex', thirdIndex);
       // console.log('secondIndex', secondIndex);
       // console.log('firstIndex', firstIndex);
@@ -455,8 +460,6 @@ export default {
 
       const inputs3 = this.preTraining.inputs.slice(third, third + 1);
       const labels3 = this.preTraining.labels.slice(thirdIndex, thirdIndex + 1);
-
-      this.preTraining = { inputs: [], labels: [] };
 
       return {
         inputs1,
@@ -494,14 +497,8 @@ export default {
   color: white;
 }
 
-.time {
-  margin-top: 3rem;
-  width: 100%;
-  text-align: center;
-}
-
 .generation {
-  margin-top: 5rem;
+  margin-top: 1rem;
   width: 100%;
   text-align: center;
 }
