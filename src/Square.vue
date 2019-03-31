@@ -70,9 +70,9 @@ import * as tf from '@tensorflow/tfjs';
 import cloneDeep from 'clone-deep';
 
 const actorsDefault = [];
-const actorsCount = 3000;
+const actorsCount = 500;
 // Каждый N будет исследователем.
-const eachNumber = 300;
+const eachNumber = 50;
 
 /* eslint-disable no-plusplus */
 for (let i = 0; i < actorsCount; i++) {
@@ -176,7 +176,7 @@ export default {
         // Описание в training.inputs.
         inputShape: [3],
         activation: 'sigmoid',
-        units: 12,
+        units: 64,
       }));
 
       // this.model.add(tf.layers.dense({
