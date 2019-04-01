@@ -174,7 +174,7 @@ export default {
       this.fieldStyle = this.$refs.Square.style;
       this.fieldSize = Math.sqrt(this.field.length);
       this.maximumCellValue = Math.max(...this.field);
-      this.maximumSteps = this.maximumCellValue * 2;
+      this.maximumSteps = this.maximumCellValue;
 
       this.fieldStyle.setProperty('--quantity-rows', this.fieldSize);
       this.fieldStyle.setProperty('--quantity-columns', this.fieldSize);
@@ -185,12 +185,12 @@ export default {
         // Описание в learning.inputs.
         inputShape: [3],
         activation: 'sigmoid',
-        units: 128,
+        units: 256,
       }));
 
       this.model.add(tf.layers.dense({
         activation: 'sigmoid',
-        units: 128,
+        units: 256,
       }));
 
       this.model.add(tf.layers.dense({
@@ -247,12 +247,12 @@ export default {
     getDirectionStep([jumpTop, jumpRight, jumpBottom, jumpLeft], index) {
       // Сбрасывает некоторые решения, делая их случайными.
       if (index % eachNumber === 0) {
-        console.log(
-          'Top', jumpTop.toFixed(10),
-          'Right', jumpRight.toFixed(10),
-          'Bottom', jumpBottom.toFixed(10),
-          'Left', jumpLeft.toFixed(10),
-        );
+        // console.log(
+        //   'Top', jumpTop.toFixed(10),
+        //   'Right', jumpRight.toFixed(10),
+        //   'Bottom', jumpBottom.toFixed(10),
+        //   'Left', jumpLeft.toFixed(10),
+        // );
 
         jumpTop = Math.random();
         jumpRight = Math.random();
