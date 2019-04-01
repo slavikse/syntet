@@ -1,15 +1,19 @@
 <template>
   <div>
     <div class="stat generation">
-      Живых: {{ aliveCount }} | Поколений: {{ generation }} | Побед: {{ win }}
+      Живых: {{ alives }} | Поколений: {{ generation }} | Победы: {{ victories }}
       <br>
-      Шагов: {{ stepCount }} | Максимальное значение ячейки: {{ maximumCellValue }}
+      Максимальное значение ячейки: {{ investigatedMaximumCellValue }}
     </div>
 
     <div
       ref="Square"
       class="Square"
       tabindex="0"
+      @keyup.up="handJumpTop"
+      @keyup.right="handJumpRight"
+      @keyup.down="handJumpBottom"
+      @keyup.left="handJumpLeft"
     >
       <div class="cells field">
         <div
@@ -26,7 +30,14 @@
           </div>
 
           <div
-            v-if="cellValue === maxCellValues"
+            v-if="cellValue === investigatedMaximumCellValue"
+            class="maximum-cell-value-checkpoint"
+          >
+            ЛУЧШИЙ
+          </div>
+
+          <div
+            v-if="cellValue === maximumCellValue"
             class="finishing-checkpoint"
           >
             ФИНИШ
@@ -50,7 +61,7 @@
             class="actor"
           >
             <div class="actor-icon">
-              🐥
+              🤟
             </div>
 
             <!-- Усики сканирующие клетку во всех четырёх сторонах. -->
@@ -70,9 +81,10 @@ import * as tf from '@tensorflow/tfjs';
 import cloneDeep from 'clone-deep';
 
 const actorsDefault = [];
-const actorsCount = 500;
+const actorsCount = 1000;
 // Каждый N будет исследователем.
-const eachNumber = 50;
+const eachNumber = 100;
+const automaticControl = true;
 
 /* eslint-disable no-plusplus */
 for (let i = 0; i < actorsCount; i++) {
@@ -92,12 +104,12 @@ export default {
     return {
       model: tf.sequential(),
       // Очищаемое поколение всех актёров перед следующим поколением.
-      preTraining: {
+      training: {
         inputs: [],
         labels: [],
       },
-      // Набор лучших поколений из нескольких в preTraining.
-      training: {
+      // Набор лучших поколений из нескольких в training.
+      learning: {
         // x, y - Нормализованные координаты актёра.
         // step - Количество шагов, сделанных от стартовой позиции.
         inputs: [],
@@ -108,12 +120,13 @@ export default {
         labels: [],
       },
       generation: 0,
-      win: 0,
+      victories: 0,
 
       actors: [],
-      maximumCellValue: 0,
+      alives: -1,
+      // Самое максимальное значение пройденной ячейки за эпоху.
+      investigatedMaximumCellValue: 1,
 
-      fieldStyle: undefined,
       // Игровая область обязательно квадратной формы, для Math.sqrt(this.field.length).
       // Обязательно между доступным путём, должно быть 2 запретных ячейки из за усиков.
       // 0 - Запретная территория.
@@ -138,20 +151,11 @@ export default {
       ],
       // @formatter:on
       /* eslint-enable no-multi-spaces */
-      maxCellValues: 45,
-      maxStep: 45 * 2,
-      size: -1,
+      fieldStyle: undefined,
+      fieldSize: -1,
+      maximumCellValue: -1,
+      maximumSteps: -1,
     };
-  },
-
-  computed: {
-    aliveCount() {
-      return this.actors.filter(({ alive }) => alive).length || 0;
-    },
-
-    stepCount() {
-      return Math.max(0, ...this.actors.filter(({ alive }) => alive).map(({ step }) => step));
-    },
   },
 
   async mounted() {
@@ -159,35 +163,35 @@ export default {
     this.setupModel();
 
     await this.actorsReset();
-    await this.modelPredict();
+
+    if (automaticControl) {
+      await this.modelPredict();
+    }
   },
 
   methods: {
     fieldSetting() {
       this.fieldStyle = this.$refs.Square.style;
-      this.size = Math.sqrt(this.field.length);
+      this.fieldSize = Math.sqrt(this.field.length);
+      this.maximumCellValue = Math.max(...this.field);
+      this.maximumSteps = this.maximumCellValue * 2;
 
-      this.fieldStyle.setProperty('--quantity-rows', this.size);
-      this.fieldStyle.setProperty('--quantity-columns', this.size);
+      this.fieldStyle.setProperty('--quantity-rows', this.fieldSize);
+      this.fieldStyle.setProperty('--quantity-columns', this.fieldSize);
     },
 
     setupModel() {
       this.model.add(tf.layers.dense({
-        // Описание в training.inputs.
+        // Описание в learning.inputs.
         inputShape: [3],
         activation: 'sigmoid',
-        units: 64,
+        units: 128,
       }));
 
-      // this.model.add(tf.layers.dense({
-      //   activation: 'sigmoid',
-      //   units: 64,
-      // }));
-
-      // this.model.add(tf.layers.dense({
-      //   activation: 'sigmoid',
-      //   units: 128,
-      // }));
+      this.model.add(tf.layers.dense({
+        activation: 'sigmoid',
+        units: 128,
+      }));
 
       this.model.add(tf.layers.dense({
         activation: 'sigmoid',
@@ -198,7 +202,7 @@ export default {
       this.model.compile({
         optimizer: tf.train.adam(0.01),
         loss: 'meanSquaredError',
-        // metrics: ['accuracy'],
+        metrics: ['accuracy'],
       });
     },
 
@@ -217,14 +221,14 @@ export default {
         if (actor.alive) {
           const prediction = await this.model.predict(tf.tensor2d([
             [
-              actor.x / this.size,
-              actor.y / this.size,
-              actor.step / this.maxStep,
+              actor.x / this.fieldSize,
+              actor.y / this.fieldSize,
+              actor.step / this.maximumCellValue,
             ],
           ])).data();
 
-          const action = this.getAction(prediction, index);
-          this[action](actor);
+          const directionStep = this.getDirectionStep(prediction, index);
+          this[directionStep](actor);
 
           await this.availabilityCheck(actor);
         }
@@ -233,28 +237,28 @@ export default {
         // await new Promise((resolve) => {
         //   setTimeout(() => {
         //     resolve();
-        //   }, 100);
+        //   }, 1000);
         // });
       }));
 
       await this.modelPredict();
     },
 
-    getAction([jumpTop, jumpRight, jumpBottom, jumpLeft], index) {
+    getDirectionStep([jumpTop, jumpRight, jumpBottom, jumpLeft], index) {
       // Сбрасывает некоторые решения, делая их случайными.
       if (index % eachNumber === 0) {
+        console.log(
+          'Top', jumpTop.toFixed(10),
+          'Right', jumpRight.toFixed(10),
+          'Bottom', jumpBottom.toFixed(10),
+          'Left', jumpLeft.toFixed(10),
+        );
+
         jumpTop = Math.random();
         jumpRight = Math.random();
         jumpBottom = Math.random();
         jumpLeft = Math.random();
       }
-
-      // console.log(
-      //   'Top', jumpTop.toFixed(10),
-      //   'Right', jumpRight.toFixed(10),
-      //   'Bottom', jumpBottom.toFixed(10),
-      //   'Left', jumpLeft.toFixed(10),
-      // );
 
       let maximum = jumpTop;
       let action = 'jumpTop';
@@ -297,49 +301,44 @@ export default {
       // Смещение на -1: Сетка начинается с 1, а значения в массиве начинаются с 0.
       const normalY = actor.y - 1;
       const normalX = actor.x - 1;
-      const cellValue = this.field[normalY * this.size + normalX];
-
-      // Очень важно передавать значения в label[] в таком же порядке!
+      const cellValue = this.field[normalY * this.fieldSize + normalX];
       const label = this.getAntennaCellValues({ normalX, normalY });
 
       // Сброс при успешном прохождении.
       let isReset = false;
-
-      // Ввод максимального шага.
-      if (cellValue > this.maximumCellValue) {
-        this.maximumCellValue = cellValue;
-      }
 
       switch (true) {
         case cellValue === 0:
           actor.alive = false;
           break;
 
-        case actor.step === this.maxStep:
-          actor.alive = false;
-          break;
-
-        case cellValue > 0 && cellValue < this.maxCellValues:
+        case cellValue > 0 && cellValue < this.maximumCellValue:
           actor.step += 1;
           break;
 
-        case cellValue === this.maxCellValues:
+        case actor.step === this.maximumSteps:
           actor.alive = false;
+          break;
+
+        case cellValue === this.maximumCellValue:
+          this.victories += 1;
           isReset = true;
-          console.log('ФИНИШ!', actor.x, actor.y);
-
           actor.step += 1;
-          this.win += 1;
+          actor.alive = false;
           break;
 
         default:
       }
 
-      this.savePreTraining({ actor, label });
+      if (cellValue > this.investigatedMaximumCellValue) {
+        this.investigatedMaximumCellValue = cellValue;
+      }
 
-      const living = this.actors.filter(({ alive }) => alive).length;
+      this.saveTraining({ actor, label });
 
-      if (living === 0) {
+      this.alives = this.actors.filter(({ alive }) => alive).length;
+
+      if (this.alives === 0) {
         await this.modelFit();
       }
 
@@ -351,126 +350,189 @@ export default {
     // Получение значения ячейки, чем дальше ячейка от старта, тем больше там значение.
     getAntennaCellValues({ normalX, normalY }) {
       // 0 - когда выходит за пределы поля (дальше пути нет).
-      const top = this.field[(normalY - 1) * this.size + normalX] || 0;
-      const right = this.field[normalY * this.size + (normalX + 1)] || 0;
-      const bottom = this.field[(normalY + 1) * this.size + normalX] || 0;
-      const left = this.field[normalY * this.size + (normalX - 1)] || 0;
+      const top = this.field[(normalY - 1) * this.fieldSize + normalX] || 0;
+      const right = this.field[normalY * this.fieldSize + (normalX + 1)] || 0;
+      const bottom = this.field[(normalY + 1) * this.fieldSize + normalX] || 0;
+      const left = this.field[normalY * this.fieldSize + (normalX - 1)] || 0;
 
       return [
-        top / this.maxCellValues,
-        right / this.maxCellValues,
-        bottom / this.maxCellValues,
-        left / this.maxCellValues,
+        top / this.maximumCellValue,
+        right / this.maximumCellValue,
+        bottom / this.maximumCellValue,
+        left / this.maximumCellValue,
       ];
     },
 
-    savePreTraining({ actor, label }) {
-      this.preTraining.inputs.push([
-        actor.x / this.size,
-        actor.y / this.size,
-        actor.step / this.maxStep,
+    saveTraining({ actor, label }) {
+      this.training.inputs.push([
+        actor.x / this.fieldSize,
+        actor.y / this.fieldSize,
+        actor.step / this.maximumCellValue,
       ]);
 
-      this.preTraining.labels.push(label);
+      this.training.labels.push(label);
     },
 
     async modelFit() {
       const {
-        inputs1,
-        labels1,
+        firstInput,
+        firstLabel,
 
-        inputs2,
-        labels2,
+        secondInput,
+        secondLabel,
 
-        inputs3,
-        labels3,
-      } = this.getTheBest();
+        thirdInput,
+        thirdLabel,
 
-      this.training.inputs.push(...inputs1, ...inputs2, ...inputs3);
-      this.training.labels.push(...labels1, ...labels2, ...labels3);
+        fourInput,
+        fourLabel,
 
-      // await this.model.fit(
-      //   tf.tensor2d(this.preTraining.inputs),
-      //   tf.tensor2d(this.preTraining.labels),
-      // );
+        fiveInput,
+        fiveLabel,
+      } = this.getBestMoves();
 
-      this.preTraining = { inputs: [], labels: [] };
+      this.learning.inputs.push(
+        firstInput,
+        secondInput,
+        thirdInput,
+        fourInput,
+        fiveInput,
+      );
+
+      this.learning.labels.push(
+        firstLabel,
+        secondLabel,
+        thirdLabel,
+        fourLabel,
+        fiveLabel,
+      );
 
       await this.model.fit(
-        tf.tensor2d(this.training.inputs),
-        tf.tensor2d(this.training.labels),
+        tf.tensor2d(this.learning.inputs),
+        tf.tensor2d(this.learning.labels),
       );
 
       this.generation += 1;
       await this.actorsReset();
     },
 
-    getTheBest() {
-      let third = 0;
-      let second = 0;
-      let first = 0;
+    getBestMoves() {
+      const { inputs, labels } = this.training;
+      this.training = { inputs: [], labels: [] };
 
-      let thirdIndex = 0;
-      let secondIndex = 0;
-      let firstIndex = 0;
+      let fiveStep = -1;
+      let fourStep = -1;
+      let thirdStep = -1;
+      let secondStep = -1;
+      let firstStep = -1;
 
-      this.preTraining.inputs.forEach(([, , step], index) => {
+      let fiveIndex = -1;
+      let fourIndex = -1;
+      let thirdIndex = -1;
+      let secondIndex = -1;
+      let firstIndex = -1;
+
+      inputs.forEach(([, , step], index) => {
         switch (true) {
-          case step > first:
-            third = second;
-            second = first;
-            first = step;
+          case step > firstStep:
+            fiveStep = fourStep;
+            fourStep = thirdStep;
+            thirdStep = secondStep;
+            secondStep = firstStep;
+            firstStep = step;
 
+            fiveIndex = fourIndex;
+            fourIndex = thirdIndex;
             thirdIndex = secondIndex;
             secondIndex = firstIndex;
             firstIndex = index;
             break;
 
-          case step > second:
-            third = second;
-            second = step;
+          case step > secondStep:
+            fiveStep = fourStep;
+            fourStep = thirdStep;
+            thirdStep = secondStep;
+            secondStep = step;
 
+            fiveIndex = fourIndex;
+            fourIndex = thirdIndex;
             thirdIndex = secondIndex;
             secondIndex = index;
             break;
 
-          case step > third:
-            third = step;
+          case step > thirdStep:
+            fiveStep = fourStep;
+            fourStep = thirdStep;
+            thirdStep = step;
 
+            fiveIndex = fourIndex;
+            fourIndex = thirdIndex;
             thirdIndex = index;
+            break;
+
+          case step > fourStep:
+            fiveStep = fourStep;
+            fourStep = step;
+
+            fiveIndex = fourIndex;
+            fourIndex = index;
+            break;
+
+          case step > fiveStep:
+            fiveStep = step;
+
+            fiveIndex = index;
             break;
 
           default:
         }
       });
 
-      // console.log('third', third);
-      // console.log('second', second);
-      // console.log('first', first);
-
-      // console.log('thirdIndex', thirdIndex);
-      // console.log('secondIndex', secondIndex);
-      // console.log('firstIndex', firstIndex);
-
-      const inputs1 = this.preTraining.inputs.slice(first, first + 1);
-      const labels1 = this.preTraining.labels.slice(firstIndex, firstIndex + 1);
-
-      const inputs2 = this.preTraining.inputs.slice(second, second + 1);
-      const labels2 = this.preTraining.labels.slice(secondIndex, secondIndex + 1);
-
-      const inputs3 = this.preTraining.inputs.slice(third, third + 1);
-      const labels3 = this.preTraining.labels.slice(thirdIndex, thirdIndex + 1);
-
       return {
-        inputs1,
-        labels1,
+        firstInput: inputs[firstIndex],
+        firstLabel: labels[firstIndex],
 
-        inputs2,
-        labels2,
+        secondInput: inputs[secondIndex],
+        secondLabel: labels[secondIndex],
 
-        inputs3,
-        labels3,
+        thirdInput: inputs[thirdIndex],
+        thirdLabel: labels[thirdIndex],
+
+        fourInput: inputs[fourIndex],
+        fourLabel: labels[fourIndex],
+
+        fiveInput: inputs[fiveIndex],
+        fiveLabel: labels[fiveIndex],
       };
+    },
+
+    // Специально для ручного управления.
+    async handJumpTop() {
+      const [actor] = this.actors;
+
+      this.jumpTop(actor);
+      await this.availabilityCheck(actor);
+    },
+
+    async handJumpRight() {
+      const [actor] = this.actors;
+
+      this.jumpRight(actor);
+      await this.availabilityCheck(actor);
+    },
+
+    async handJumpBottom() {
+      const [actor] = this.actors;
+
+      this.jumpBottom(actor);
+      await this.availabilityCheck(actor);
+    },
+
+    async handJumpLeft() {
+      const [actor] = this.actors;
+
+      this.jumpLeft(actor);
+      await this.availabilityCheck(actor);
     },
   },
 };
@@ -517,6 +579,7 @@ export default {
 }
 
 .starting-checkpoint,
+.maximum-cell-value-checkpoint,
 .finishing-checkpoint {
   display: flex;
   flex-direction: column;
@@ -528,6 +591,12 @@ export default {
   font-weight: bold;
   background-color: seagreen;
   outline: 0.5rem dashed seagreen;
+}
+
+.maximum-cell-value-checkpoint {
+  font-size: 0.6rem;
+  background-color: brown;
+  outline: 0.5rem dashed brown;
 }
 
 .field {
@@ -562,9 +631,9 @@ export default {
 
 .antenna {
   position: absolute;
-  height: 2px;
+  height: 1px;
   width: 1.5rem;
-  background-color: white;
+  background-color: yellow;
 }
 
 .jump-top {
