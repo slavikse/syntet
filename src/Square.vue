@@ -26,21 +26,21 @@
             v-if="cellValue === 1"
             class="starting-checkpoint"
           >
-            СТАРТ
+            👋🏻
           </div>
 
           <div
             v-if="cellValue === investigatedMaximumCellValue"
             class="maximum-cell-value-checkpoint"
           >
-            ЛУЧШИЙ
+            🤟
           </div>
 
           <div
             v-if="cellValue === maximumCellValue"
             class="finishing-checkpoint"
           >
-            ФИНИШ
+            💯
           </div>
         </div>
       </div>
@@ -53,16 +53,13 @@
             gridRow: actor.y,
             gridColumn: actor.x,
           }"
-          class="actor-container"
         >
           <div
             v-if="actor.alive"
             :ref="`actors_${index}`"
             class="actor"
           >
-            <div class="actor-icon">
-              🤟
-            </div>
+            <div>🏃️</div>
           </div>
         </div>
       </div>
@@ -583,15 +580,12 @@ export default {
   justify-content: center;
   align-items: center;
   width: 100%;
-  line-height: 0.9;
-  font-size: 0.7rem;
-  font-weight: bold;
+  font-size: 2rem;
   background-color: seagreen;
   outline: 0.5rem dashed seagreen;
 }
 
 .maximum-cell-value-checkpoint {
-  font-size: 0.6rem;
   background-color: brown;
   outline: 0.5rem dashed brown;
 }
@@ -607,22 +601,12 @@ export default {
   position: absolute;
 }
 
-.actor-container {
-  position: relative;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
 .actor {
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  height: 100%;
+  width: 100%;
+  text-align: center;
+  font-size: 2rem;
   background-color: yellow;
   outline: 0.5rem dashed yellow;
-}
-
-.actor-icon {
-  font-size: 2.4rem;
 }
 </style>
