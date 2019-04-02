@@ -9,6 +9,7 @@
   "dependencies": {
     "@tensorflow/tfjs": "^1.0.3",
     "clone-deep": "^4.0.1",
+    "nanoid": "^2.0.1",
     "vue": "^2.6.10"
   },
   "devDependencies": {

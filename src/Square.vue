@@ -47,16 +47,15 @@
 
       <div class="actors field">
         <div
-          v-for="(actor, index) in actors"
-          :key="index"
+          v-for="actor in actors"
+          :key="actor.id"
           :style="{
             gridRow: actor.y,
             gridColumn: actor.x,
           }"
         >
           <div
-            v-if="actor.alive"
-            :ref="`actors_${index}`"
+            :ref="`actors_${actor.id}`"
             class="actor"
           >
             <div>🏃️</div>
@@ -69,20 +68,23 @@
 
 <script>
 import * as tf from '@tensorflow/tfjs';
+import nanoid from 'nanoid';
 import cloneDeep from 'clone-deep';
 
 const actorsDefault = [];
 const actorsCount = 1000;
 // Каждый N будет исследователем.
-const eachNumber = 10;
+const eachNumber = 100;
 const automaticControl = true;
 
 /* eslint-disable no-plusplus */
 for (let i = 0; i < actorsCount; i++) {
   actorsDefault.push({
-    alive: true,
+    id: nanoid(10),
     x: 2,
     y: 2,
+    alive: true,
+    cellValue: 0,
     step: 0,
     style: undefined,
   });
@@ -102,7 +104,7 @@ export default {
       // Набор лучших поколений из нескольких в training.
       learning: {
         // x, y - Нормализованные координаты актёра.
-        // step - Количество шагов, сделанных от стартовой позиции.
+        // cellValue - Количество шагов, сделанных от стартовой позиции.
         inputs: [],
         // [1, 0, 0, 0] - Пойти на север (north).
         // [0, 1, 0, 0] - Пойти на восток (east).
@@ -113,13 +115,16 @@ export default {
       generation: 0,
       victories: 0,
 
+      // Набор генерируемых актёров.
       actors: [],
+      // Актёры оставшиеся в живых.
       alives: -1,
-      // Самое максимальное значение пройденной ячейки за эпоху.
+      // Самое максимальное значение пройденной ячейки.
       investigatedMaximumCellValue: 1,
 
       // Игровая область обязательно квадратной формы, для Math.sqrt(this.field.length).
-      // Обязательно между доступным путём, должно быть 2 запретных ячейки из за усиков.
+      // Обязательно между доступным путём, должно быть 2 запретных ячейки
+      // из за исследовательских "усиков".
       // 0 - Запретная территория.
       // [1..N) - Проходная территория.
       // N - Финишная точка.
@@ -179,10 +184,10 @@ export default {
         units: 128,
       }));
 
-      this.model.add(tf.layers.dense({
-        activation: 'sigmoid',
-        units: 128,
-      }));
+      // this.model.add(tf.layers.dense({
+      //   activation: 'sigmoid',
+      //   units: 64,
+      // }));
 
       this.model.add(tf.layers.dense({
         activation: 'sigmoid',
@@ -201,8 +206,8 @@ export default {
       this.actors = cloneDeep(actorsDefault);
       await this.$nextTick();
 
-      this.actors.forEach((actor, index) => {
-        const [{ style }] = this.$refs[`actors_${index}`];
+      this.actors.forEach((actor) => {
+        const [{ style }] = this.$refs[`actors_${actor.id}`];
         actor.style = style;
       });
     },
@@ -212,19 +217,12 @@ export default {
         if (actor.alive) {
           let prediction;
 
-          // Сбрасывает некоторые решения, делая их случайными.
+          // Создание случайных решений для исследователей.
           if (index % eachNumber === 0) {
             const jumpTop = Math.random();
             const jumpRight = Math.random();
             const jumpBottom = Math.random();
             const jumpLeft = Math.random();
-
-            // console.log(
-            //   'Top', jumpTop.toFixed(10),
-            //   'Right', jumpRight.toFixed(10),
-            //   'Bottom', jumpBottom.toFixed(10),
-            //   'Left', jumpLeft.toFixed(10),
-            // );
 
             prediction = [jumpTop, jumpRight, jumpBottom, jumpLeft];
           } else {
@@ -232,9 +230,16 @@ export default {
               [
                 actor.x / this.fieldSize,
                 actor.y / this.fieldSize,
-                actor.step / this.maximumCellValue,
+                actor.cellValue / this.maximumCellValue,
               ],
             ])).data();
+
+            // console.log(
+            //   'Top', prediction[0].toFixed(10),
+            //   'Right', prediction[1].toFixed(10),
+            //   'Bottom', prediction[2].toFixed(10),
+            //   'Left', prediction[3].toFixed(10),
+            // );
           }
 
           const directionStep = this.getDirectionStep(prediction);
@@ -251,6 +256,7 @@ export default {
         // });
       }));
 
+      this.actors = this.actors.filter(({ alive }) => alive);
       await this.modelPredict();
     },
 
@@ -269,7 +275,7 @@ export default {
       }
 
       if (jumpLeft > maximum) {
-        maximum = jumpLeft;
+        // maximum = jumpLeft;
         action = 'jumpLeft';
       }
 
@@ -308,18 +314,20 @@ export default {
           break;
 
         case cellValue > 0 && cellValue < this.maximumCellValue:
+          actor.cellValue = cellValue;
           actor.step += 1;
-          break;
 
-        case actor.step === this.maximumSteps:
-          actor.alive = false;
+          if (actor.step === this.maximumSteps) {
+            actor.alive = false;
+          }
           break;
 
         case cellValue === this.maximumCellValue:
-          this.victories += 1;
           isReset = true;
+          actor.cellValue = cellValue;
           actor.step += 1;
           actor.alive = false;
+          this.victories += 1;
           break;
 
         default:
@@ -345,16 +353,16 @@ export default {
     // Получение значения ячейки, чем дальше ячейка от старта, тем больше там значение.
     getAntennaCellValues({ normalX, normalY }) {
       // 0 - когда выходит за пределы поля (дальше пути нет).
-      const top = this.field[(normalY - 1) * this.fieldSize + normalX] || 0;
-      const right = this.field[normalY * this.fieldSize + (normalX + 1)] || 0;
-      const bottom = this.field[(normalY + 1) * this.fieldSize + normalX] || 0;
-      const left = this.field[normalY * this.fieldSize + (normalX - 1)] || 0;
+      const topCellValue = this.field[(normalY - 1) * this.fieldSize + normalX] || 0;
+      const rightCellValue = this.field[normalY * this.fieldSize + (normalX + 1)] || 0;
+      const bottomCellValue = this.field[(normalY + 1) * this.fieldSize + normalX] || 0;
+      const leftCellValue = this.field[normalY * this.fieldSize + (normalX - 1)] || 0;
 
       return [
-        top / this.maximumCellValue,
-        right / this.maximumCellValue,
-        bottom / this.maximumCellValue,
-        left / this.maximumCellValue,
+        topCellValue / this.maximumCellValue,
+        rightCellValue / this.maximumCellValue,
+        bottomCellValue / this.maximumCellValue,
+        leftCellValue / this.maximumCellValue,
       ];
     },
 
@@ -362,7 +370,7 @@ export default {
       this.training.inputs.push([
         actor.x / this.fieldSize,
         actor.y / this.fieldSize,
-        actor.step / this.maximumCellValue,
+        actor.cellValue / this.maximumCellValue,
       ]);
 
       this.training.labels.push(label);
@@ -387,7 +395,6 @@ export default {
       } = this.getBestMoves();
 
       await this.model.fit(
-        // inputs
         tf.tensor2d([
           firstInput,
           secondInput,
@@ -396,7 +403,6 @@ export default {
           fiveInput,
         ]),
 
-        // labels
         tf.tensor2d([
           firstLabel,
           secondLabel,
@@ -406,6 +412,27 @@ export default {
         ]),
       );
 
+      // this.learning.inputs.push(
+      //   firstInput,
+      //   secondInput,
+      //   thirdInput,
+      //   fourInput,
+      //   fiveInput,
+      // );
+      //
+      // this.learning.labels.push(
+      //   firstLabel,
+      //   secondLabel,
+      //   thirdLabel,
+      //   fourLabel,
+      //   fiveLabel,
+      // );
+
+      // await this.model.fit(
+      //   this.learning.inputs,
+      //   this.learning.labels,
+      // );
+
       this.generation += 1;
       await this.actorsReset();
     },
@@ -414,11 +441,11 @@ export default {
       const { inputs, labels } = this.training;
       this.training = { inputs: [], labels: [] };
 
-      let fiveStep = -1;
-      let fourStep = -1;
-      let thirdStep = -1;
-      let secondStep = -1;
-      let firstStep = -1;
+      let fiveCellValue = -1;
+      let fourCellValue = -1;
+      let thirdCellValue = -1;
+      let secondCellValue = -1;
+      let firstCellValue = -1;
 
       let fiveIndex = -1;
       let fourIndex = -1;
@@ -426,14 +453,14 @@ export default {
       let secondIndex = -1;
       let firstIndex = -1;
 
-      inputs.forEach(([, , step], index) => {
+      inputs.forEach(([, , cellValue], index) => {
         switch (true) {
-          case step > firstStep:
-            fiveStep = fourStep;
-            fourStep = thirdStep;
-            thirdStep = secondStep;
-            secondStep = firstStep;
-            firstStep = step;
+          case cellValue > firstCellValue:
+            fiveCellValue = fourCellValue;
+            fourCellValue = thirdCellValue;
+            thirdCellValue = secondCellValue;
+            secondCellValue = firstCellValue;
+            firstCellValue = cellValue;
 
             fiveIndex = fourIndex;
             fourIndex = thirdIndex;
@@ -442,11 +469,11 @@ export default {
             firstIndex = index;
             break;
 
-          case step > secondStep:
-            fiveStep = fourStep;
-            fourStep = thirdStep;
-            thirdStep = secondStep;
-            secondStep = step;
+          case cellValue > secondCellValue:
+            fiveCellValue = fourCellValue;
+            fourCellValue = thirdCellValue;
+            thirdCellValue = secondCellValue;
+            secondCellValue = cellValue;
 
             fiveIndex = fourIndex;
             fourIndex = thirdIndex;
@@ -454,26 +481,26 @@ export default {
             secondIndex = index;
             break;
 
-          case step > thirdStep:
-            fiveStep = fourStep;
-            fourStep = thirdStep;
-            thirdStep = step;
+          case cellValue > thirdCellValue:
+            fiveCellValue = fourCellValue;
+            fourCellValue = thirdCellValue;
+            thirdCellValue = cellValue;
 
             fiveIndex = fourIndex;
             fourIndex = thirdIndex;
             thirdIndex = index;
             break;
 
-          case step > fourStep:
-            fiveStep = fourStep;
-            fourStep = step;
+          case cellValue > fourCellValue:
+            fiveCellValue = fourCellValue;
+            fourCellValue = cellValue;
 
             fiveIndex = fourIndex;
             fourIndex = index;
             break;
 
-          case step > fiveStep:
-            fiveStep = step;
+          case cellValue > fiveCellValue:
+            fiveCellValue = cellValue;
 
             fiveIndex = index;
             break;
