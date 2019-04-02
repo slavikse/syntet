@@ -63,12 +63,6 @@
             <div class="actor-icon">
               🤟
             </div>
-
-            <!-- Усики сканирующие клетку во всех четырёх сторонах. -->
-            <div class="antenna jump-top" />
-            <div class="antenna jump-right" />
-            <div class="antenna jump-bottom" />
-            <div class="antenna jump-left" />
           </div>
         </div>
       </div>
@@ -83,7 +77,7 @@ import cloneDeep from 'clone-deep';
 const actorsDefault = [];
 const actorsCount = 1000;
 // Каждый N будет исследователем.
-const eachNumber = 5;
+const eachNumber = 10;
 const automaticControl = true;
 
 /* eslint-disable no-plusplus */
@@ -185,12 +179,12 @@ export default {
         // Описание в learning.inputs.
         inputShape: [3],
         activation: 'sigmoid',
-        units: 256,
+        units: 128,
       }));
 
       this.model.add(tf.layers.dense({
         activation: 'sigmoid',
-        units: 256,
+        units: 128,
       }));
 
       this.model.add(tf.layers.dense({
@@ -395,25 +389,24 @@ export default {
         fiveLabel,
       } = this.getBestMoves();
 
-      this.learning.inputs.push(
-        firstInput,
-        secondInput,
-        thirdInput,
-        fourInput,
-        fiveInput,
-      );
-
-      this.learning.labels.push(
-        firstLabel,
-        secondLabel,
-        thirdLabel,
-        fourLabel,
-        fiveLabel,
-      );
-
       await this.model.fit(
-        tf.tensor2d(this.learning.inputs),
-        tf.tensor2d(this.learning.labels),
+        // inputs
+        tf.tensor2d([
+          firstInput,
+          secondInput,
+          thirdInput,
+          fourInput,
+          fiveInput,
+        ]),
+
+        // labels
+        tf.tensor2d([
+          firstLabel,
+          secondLabel,
+          thirdLabel,
+          fourLabel,
+          fiveLabel,
+        ]),
       );
 
       this.generation += 1;
@@ -631,31 +624,5 @@ export default {
 
 .actor-icon {
   font-size: 2.4rem;
-}
-
-.antenna {
-  position: absolute;
-  height: 1px;
-  width: 1.5rem;
-  background-color: yellow;
-}
-
-.jump-top {
-  top: -1.3rem;
-  transform: rotate(90deg);
-}
-
-.jump-right {
-  right: -2rem;
-  transform: rotate(180deg);
-}
-
-.jump-bottom {
-  bottom: -1.3rem;
-  transform: rotate(270deg);
-}
-
-.jump-left {
-  left: -2rem;
 }
 </style>
