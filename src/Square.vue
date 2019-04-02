@@ -83,7 +83,7 @@ import cloneDeep from 'clone-deep';
 const actorsDefault = [];
 const actorsCount = 1000;
 // Каждый N будет исследователем.
-const eachNumber = 100;
+const eachNumber = 5;
 const automaticControl = true;
 
 /* eslint-disable no-plusplus */
@@ -219,15 +219,34 @@ export default {
     async modelPredict() {
       await Promise.all(this.actors.map(async (actor, index) => {
         if (actor.alive) {
-          const prediction = await this.model.predict(tf.tensor2d([
-            [
-              actor.x / this.fieldSize,
-              actor.y / this.fieldSize,
-              actor.step / this.maximumCellValue,
-            ],
-          ])).data();
+          let prediction;
 
-          const directionStep = this.getDirectionStep(prediction, index);
+          // Сбрасывает некоторые решения, делая их случайными.
+          if (index % eachNumber === 0) {
+            const jumpTop = Math.random();
+            const jumpRight = Math.random();
+            const jumpBottom = Math.random();
+            const jumpLeft = Math.random();
+
+            // console.log(
+            //   'Top', jumpTop.toFixed(10),
+            //   'Right', jumpRight.toFixed(10),
+            //   'Bottom', jumpBottom.toFixed(10),
+            //   'Left', jumpLeft.toFixed(10),
+            // );
+
+            prediction = [jumpTop, jumpRight, jumpBottom, jumpLeft];
+          } else {
+            prediction = await this.model.predict(tf.tensor2d([
+              [
+                actor.x / this.fieldSize,
+                actor.y / this.fieldSize,
+                actor.step / this.maximumCellValue,
+              ],
+            ])).data();
+          }
+
+          const directionStep = this.getDirectionStep(prediction);
           this[directionStep](actor);
 
           await this.availabilityCheck(actor);
@@ -244,22 +263,7 @@ export default {
       await this.modelPredict();
     },
 
-    getDirectionStep([jumpTop, jumpRight, jumpBottom, jumpLeft], index) {
-      // Сбрасывает некоторые решения, делая их случайными.
-      if (index % eachNumber === 0) {
-        // console.log(
-        //   'Top', jumpTop.toFixed(10),
-        //   'Right', jumpRight.toFixed(10),
-        //   'Bottom', jumpBottom.toFixed(10),
-        //   'Left', jumpLeft.toFixed(10),
-        // );
-
-        jumpTop = Math.random();
-        jumpRight = Math.random();
-        jumpBottom = Math.random();
-        jumpLeft = Math.random();
-      }
-
+    getDirectionStep([jumpTop, jumpRight, jumpBottom, jumpLeft]) {
       let maximum = jumpTop;
       let action = 'jumpTop';
 
