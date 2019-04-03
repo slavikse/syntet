@@ -1,51 +1,48 @@
 <template>
   <div>
-    <div class="stat generation">
+    <div class="stat">
       Живых: {{ alives }} | Поколений: {{ generation }} | Победы: {{ victories }}
-      <br>
-      Максимальное значение ячейки: {{ investigatedMaximumCellValue }}
     </div>
 
     <div
-      ref="Square"
-      class="Square"
+      ref="container"
+      class="container"
       tabindex="0"
       @keyup.up="handJumpTop"
       @keyup.right="handJumpRight"
       @keyup.down="handJumpBottom"
       @keyup.left="handJumpLeft"
     >
-      <div class="cells field">
+      <div class="field cells">
         <div
           v-for="(cellValue, index) in field"
           :key="index"
-          :data-cell-value="cellValue"
           :class="['cell', { 'available': cellValue !== 0 }]"
         >
           <div
             v-if="cellValue === 1"
             class="starting-checkpoint"
           >
-            👋🏻
+            🥾
           </div>
 
           <div
             v-if="cellValue === investigatedMaximumCellValue"
             class="maximum-cell-value-checkpoint"
           >
-            🤟
+            🤘
           </div>
 
           <div
             v-if="cellValue === maximumCellValue"
             class="finishing-checkpoint"
           >
-            💯
+            🧠
           </div>
         </div>
       </div>
 
-      <div class="actors field">
+      <div class="field actors">
         <div
           v-for="actor in actors"
           :key="actor.id"
@@ -58,7 +55,7 @@
             :ref="`actors_${actor.id}`"
             class="actor"
           >
-            <div>🏃️</div>
+            <div>👣️</div>
           </div>
         </div>
       </div>
@@ -68,28 +65,17 @@
 
 <script>
 import * as tf from '@tensorflow/tfjs';
-import nanoid from 'nanoid';
-import cloneDeep from 'clone-deep';
 
-const actorsDefault = [];
-const actorsCount = 1000;
-// Каждый N будет исследователем.
-const eachNumber = 100;
 const automaticControl = true;
+const actorsCount = 1000;
+
+// Каждый N будет исследователем.
+const everyNWillResearcher = 50;
+let everyNWillResearcherCounter = 0;
+
+// todo режим без отображения актёров.
 
 /* eslint-disable no-plusplus */
-for (let i = 0; i < actorsCount; i++) {
-  actorsDefault.push({
-    id: nanoid(10),
-    x: 2,
-    y: 2,
-    alive: true,
-    cellValue: 0,
-    step: 0,
-    style: undefined,
-  });
-}
-
 export default {
   name: 'Square',
 
@@ -101,7 +87,7 @@ export default {
         inputs: [],
         labels: [],
       },
-      // Набор лучших поколений из нескольких в training.
+      // Набор лучших в поколений из нескольких собираемых в training.
       learning: {
         // x, y - Нормализованные координаты актёра.
         // cellValue - Количество шагов, сделанных от стартовой позиции.
@@ -117,12 +103,12 @@ export default {
 
       // Набор генерируемых актёров.
       actors: [],
-      // Актёры оставшиеся в живых.
-      alives: -1,
-      // Самое максимальное значение пройденной ячейки.
+      // Количество актёров оставшихся в живых.
+      alives: actorsCount,
+      // Максимальное значение пройденной ячейки.
       investigatedMaximumCellValue: 1,
 
-      // Игровая область обязательно квадратной формы, для Math.sqrt(this.field.length).
+      // Игровая область обязательно квадратной формы под Math.sqrt.
       // Обязательно между доступным путём, должно быть 2 запретных ячейки
       // из за исследовательских "усиков".
       // 0 - Запретная территория.
@@ -147,18 +133,16 @@ export default {
       ],
       // @formatter:on
       /* eslint-enable no-multi-spaces */
-      fieldStyle: undefined,
       fieldSize: -1,
       maximumCellValue: -1,
-      maximumSteps: -1,
     };
   },
 
   async mounted() {
-    this.fieldSetting();
     this.setupModel();
 
-    await this.actorsReset();
+    this.fieldSetting();
+    await this.actorsSetting();
 
     if (automaticControl) {
       await this.modelPredict();
@@ -166,27 +150,30 @@ export default {
   },
 
   methods: {
-    fieldSetting() {
-      this.fieldStyle = this.$refs.Square.style;
-      this.fieldSize = Math.sqrt(this.field.length);
-      this.maximumCellValue = Math.max(...this.field);
-      this.maximumSteps = this.maximumCellValue;
-
-      this.fieldStyle.setProperty('--quantity-rows', this.fieldSize);
-      this.fieldStyle.setProperty('--quantity-columns', this.fieldSize);
-    },
-
     setupModel() {
       this.model.add(tf.layers.dense({
         // Описание в learning.inputs.
         inputShape: [3],
         activation: 'sigmoid',
+        units: 256,
+      }));
+
+      this.model.add(tf.layers.dropout({
+        rate: 0.01,
+      }));
+
+      this.model.add(tf.layers.dense({
+        activation: 'sigmoid',
         units: 128,
       }));
 
+      // this.model.add(tf.layers.dropout({
+      //   rate: 0.1,
+      // }));
+      //
       // this.model.add(tf.layers.dense({
       //   activation: 'sigmoid',
-      //   units: 64,
+      //   units: 32,
       // }));
 
       this.model.add(tf.layers.dense({
@@ -202,8 +189,27 @@ export default {
       });
     },
 
-    async actorsReset() {
-      this.actors = cloneDeep(actorsDefault);
+    fieldSetting() {
+      this.fieldSize = Math.sqrt(this.field.length);
+      this.maximumCellValue = Math.max(...this.field);
+
+      this.$refs.container.style.setProperty('--quantity-rows', this.fieldSize);
+      this.$refs.container.style.setProperty('--quantity-columns', this.fieldSize);
+    },
+
+    async actorsSetting() {
+      for (let i = 0; i < actorsCount; i++) {
+        this.actors.push({
+          id: i,
+          style: undefined,
+
+          // Сбрасываемые.
+          x: 2,
+          y: 2,
+          cellValue: 1,
+        });
+      }
+
       await this.$nextTick();
 
       this.actors.forEach((actor) => {
@@ -212,19 +218,25 @@ export default {
       });
     },
 
+    actorsReset() {
+      for (let i = 0; i < actorsCount; i++) {
+        this.actors[i].x = 2;
+        this.actors[i].y = 2;
+        this.actors[i].cellValue = 1;
+      }
+
+      this.alives = actorsCount;
+    },
+
     async modelPredict() {
-      await Promise.all(this.actors.map(async (actor, index) => {
-        if (actor.alive) {
+      await Promise.all(this.actors.map(async (actor) => {
+        if (actor.cellValue !== 0) {
           let prediction;
+          everyNWillResearcherCounter += 1;
 
-          // Создание случайных решений для исследователей.
-          if (index % eachNumber === 0) {
-            const jumpTop = Math.random();
-            const jumpRight = Math.random();
-            const jumpBottom = Math.random();
-            const jumpLeft = Math.random();
-
-            prediction = [jumpTop, jumpRight, jumpBottom, jumpLeft];
+          if (everyNWillResearcherCounter === everyNWillResearcher) {
+            prediction = this.getRandomPredict();
+            everyNWillResearcherCounter = 0;
           } else {
             prediction = await this.model.predict(tf.tensor2d([
               [
@@ -256,8 +268,17 @@ export default {
         // });
       }));
 
-      this.actors = this.actors.filter(({ alive }) => alive);
       await this.modelPredict();
+    },
+
+    // Создание случайных решений для исследователей.
+    getRandomPredict() {
+      return [
+        Math.random(), // jumpTop
+        Math.random(), // jumpRight
+        Math.random(), // jumpBottom
+        Math.random(), // jumpLeft
+      ];
     },
 
     getDirectionStep([jumpTop, jumpRight, jumpBottom, jumpLeft]) {
@@ -303,50 +324,30 @@ export default {
       const normalY = actor.y - 1;
       const normalX = actor.x - 1;
       const cellValue = this.field[normalY * this.fieldSize + normalX];
-      const label = this.getAntennaCellValues({ normalX, normalY });
 
-      // Сброс при успешном прохождении.
-      let isReset = false;
+      // Предотвращение зацикливания. Актёр не должен двигаться в обратном направлении.
+      if (cellValue > actor.cellValue) {
+        actor.cellValue = cellValue;
 
-      switch (true) {
-        case cellValue === 0:
-          actor.alive = false;
-          break;
+        if (cellValue > this.investigatedMaximumCellValue) {
+          this.investigatedMaximumCellValue = cellValue;
+        }
 
-        case cellValue > 0 && cellValue < this.maximumCellValue:
-          actor.cellValue = cellValue;
-          actor.step += 1;
-
-          if (actor.step === this.maximumSteps) {
-            actor.alive = false;
-          }
-          break;
-
-        case cellValue === this.maximumCellValue:
-          isReset = true;
-          actor.cellValue = cellValue;
-          actor.step += 1;
-          actor.alive = false;
+        // todo проверять
+        if (cellValue === this.maximumCellValue) {
           this.victories += 1;
-          break;
-
-        default:
+          await this.actorsReset();
+          return;
+        }
+      } else {
+        actor.cellValue = 0;
+        this.alives -= 1;
       }
 
-      if (cellValue > this.investigatedMaximumCellValue) {
-        this.investigatedMaximumCellValue = cellValue;
-      }
-
-      this.saveTraining({ actor, label });
-
-      this.alives = this.actors.filter(({ alive }) => alive).length;
+      this.saveTraining({ actor, label: this.getAntennaCellValues({ normalX, normalY }) });
 
       if (this.alives === 0) {
         await this.modelFit();
-      }
-
-      if (isReset) {
-        await this.actorsReset();
       }
     },
 
@@ -394,44 +395,26 @@ export default {
         fiveLabel,
       } = this.getBestMoves();
 
-      await this.model.fit(
-        tf.tensor2d([
-          firstInput,
-          secondInput,
-          thirdInput,
-          fourInput,
-          fiveInput,
-        ]),
-
-        tf.tensor2d([
-          firstLabel,
-          secondLabel,
-          thirdLabel,
-          fourLabel,
-          fiveLabel,
-        ]),
+      this.learning.inputs.push(
+        firstInput,
+        secondInput,
+        thirdInput,
+        fourInput,
+        fiveInput,
       );
 
-      // this.learning.inputs.push(
-      //   firstInput,
-      //   secondInput,
-      //   thirdInput,
-      //   fourInput,
-      //   fiveInput,
-      // );
-      //
-      // this.learning.labels.push(
-      //   firstLabel,
-      //   secondLabel,
-      //   thirdLabel,
-      //   fourLabel,
-      //   fiveLabel,
-      // );
+      this.learning.labels.push(
+        firstLabel,
+        secondLabel,
+        thirdLabel,
+        fourLabel,
+        fiveLabel,
+      );
 
-      // await this.model.fit(
-      //   this.learning.inputs,
-      //   this.learning.labels,
-      // );
+      await this.model.fit(
+        tf.tensor2d(this.learning.inputs),
+        tf.tensor2d(this.learning.labels),
+      );
 
       this.generation += 1;
       await this.actorsReset();
@@ -560,10 +543,19 @@ export default {
 </script>
 
 <style scoped>
-.Square {
+.stat {
+  position: absolute;
+  margin-top: 1rem;
+  width: 100%;
+  text-align: center;
+  font-size: 1.2rem;
+  color: white;
+}
+
+.container {
   --quantity-rows: -1;
   --quantity-columns: -1;
-  --column-width: 3rem;
+  --square-size: 3rem;
 
   display: flex;
   justify-content: center;
@@ -573,17 +565,11 @@ export default {
   user-select: none;
 }
 
-.stat {
-  position: absolute;
-  z-index: 1;
-  font-size: 1.2rem;
-  color: white;
-}
-
-.generation {
-  margin-top: 1rem;
-  width: 100%;
-  text-align: center;
+.field {
+  display: grid;
+  grid-template-rows: repeat(var(--quantity-rows), var(--square-size));
+  grid-template-columns: repeat(var(--quantity-columns), var(--square-size));
+  grid-gap: 0.5rem;
 }
 
 .cells {
@@ -591,7 +577,6 @@ export default {
 
 .cell {
   position: relative;
-  display: flex;
   background-color: #222;
 }
 
@@ -602,11 +587,12 @@ export default {
 .starting-checkpoint,
 .maximum-cell-value-checkpoint,
 .finishing-checkpoint {
+  position: absolute;
   display: flex;
-  flex-direction: column;
   justify-content: center;
   align-items: center;
   width: 100%;
+  height: 100%;
   font-size: 2rem;
   background-color: seagreen;
   outline: 0.5rem dashed seagreen;
@@ -617,23 +603,13 @@ export default {
   outline: 0.5rem dashed brown;
 }
 
-.field {
-  display: grid;
-  grid-template-rows: repeat(var(--quantity-rows), var(--column-width));
-  grid-template-columns: repeat(var(--quantity-columns), var(--column-width));
-  grid-gap: 0.5rem;
-}
-
 .actors {
   position: absolute;
 }
 
 .actor {
   height: 100%;
-  width: 100%;
   text-align: center;
   font-size: 2rem;
-  background-color: yellow;
-  outline: 0.5rem dashed yellow;
 }
 </style>
