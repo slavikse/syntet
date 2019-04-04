@@ -1,6 +1,5 @@
 import Vue from 'vue';
 
-// import App from './Car.vue';
 import App from './Square.vue';
 
 Vue.config.productionTip = false;
