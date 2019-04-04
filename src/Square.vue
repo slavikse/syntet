@@ -42,7 +42,10 @@
         </div>
       </div>
 
-      <div class="field actors">
+      <div
+        v-if="isDisplayingActors"
+        class="field actors"
+      >
         <div
           v-for="actor in actors"
           :key="actor.id"
@@ -68,12 +71,11 @@ import * as tf from '@tensorflow/tfjs';
 
 const automaticControl = true;
 const actorsCount = 1000;
+const isDisplayingActors = false;
 
 // Каждый N будет исследователем.
 const everyNWillResearcher = 50;
 let everyNWillResearcherCounter = 0;
-
-// todo режим без отображения актёров.
 
 /* eslint-disable no-plusplus */
 export default {
@@ -101,6 +103,7 @@ export default {
       generation: 0,
       victories: 0,
 
+      isDisplayingActors,
       // Набор генерируемых актёров.
       actors: [],
       // Количество актёров оставшихся в живых.
@@ -155,11 +158,7 @@ export default {
         // Описание в learning.inputs.
         inputShape: [3],
         activation: 'sigmoid',
-        units: 256,
-      }));
-
-      this.model.add(tf.layers.dropout({
-        rate: 0.01,
+        units: 128,
       }));
 
       this.model.add(tf.layers.dense({
@@ -210,12 +209,14 @@ export default {
         });
       }
 
-      await this.$nextTick();
+      if (isDisplayingActors) {
+        await this.$nextTick();
 
-      this.actors.forEach((actor) => {
-        const [{ style }] = this.$refs[`actors_${actor.id}`];
-        actor.style = style;
-      });
+        this.actors.forEach((actor) => {
+          const [{ style }] = this.$refs[`actors_${actor.id}`];
+          actor.style = style;
+        });
+      }
     },
 
     actorsReset() {
