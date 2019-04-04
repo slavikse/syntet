@@ -27,7 +27,8 @@
           </div>
 
           <div
-            v-if="cellValue === investigatedMaximumCellValue"
+            v-if="cellValue === investigatedMaximumCellValue
+              || investigatedMaximumCellValue === maximumCellValue"
             class="maximum-cell-value-checkpoint"
           >
             🤘
@@ -72,8 +73,9 @@ import * as tf from '@tensorflow/tfjs';
 const isAutomaticControl = true;
 const isDisplayingActors = true;
 
-const actorsCount = 1000;
-const everyNWillResearcher = 50;
+const actorsCount = 500;
+const researchActors = 5;
+const everyNWillResearcher = actorsCount / researchActors;
 let everyNWillResearcherCounter = 0;
 
 /* eslint-disable no-plusplus */
@@ -337,7 +339,6 @@ export default {
           this.investigatedMaximumCellValue = cellValue;
         }
 
-        // todo проверять
         if (cellValue === this.maximumCellValue) {
           this.victories += 1;
           await this.actorsReset();
