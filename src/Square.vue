@@ -69,11 +69,10 @@
 <script>
 import * as tf from '@tensorflow/tfjs';
 
-const automaticControl = true;
-const actorsCount = 1000;
-const isDisplayingActors = false;
+const isAutomaticControl = true;
+const isDisplayingActors = true;
 
-// Каждый N будет исследователем.
+const actorsCount = 1000;
 const everyNWillResearcher = 50;
 let everyNWillResearcherCounter = 0;
 
@@ -147,7 +146,7 @@ export default {
     this.fieldSetting();
     await this.actorsSetting();
 
-    if (automaticControl) {
+    if (isAutomaticControl) {
       await this.modelPredict();
     }
   },
@@ -158,7 +157,11 @@ export default {
         // Описание в learning.inputs.
         inputShape: [3],
         activation: 'sigmoid',
-        units: 128,
+        units: 256,
+      }));
+
+      this.model.add(tf.layers.dropout({
+        rate: 0.1,
       }));
 
       this.model.add(tf.layers.dense({
