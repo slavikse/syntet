@@ -23,7 +23,6 @@
 </template>
 
 <script>
-// todo 1 Этап. Обучить сеть играть.
 // todo 2 Этап. Создание площадки для соревнования сетей.
 // todo 3 Этап. Сохранение весов лучшей предобученной сети для игры с человеком.
 
@@ -41,14 +40,20 @@ export default {
         inputs: [],
         labels: [],
       },
+
+      currentStep: 0,
+      maxStep: 10,
+
+      agents: [],
+      fieldSize: 9,
+      agentsCount: 10,
+
+      everyNWillResearcher: 8,
+      everyNWillResearcherCounter: 0,
+
       games: 0,
       victories: 0,
-      fieldSize: 9,
-      agents: [],
-      agentsCount: 5,
-      currentStep: 0,
-      everyNWillResearcherCounter: 0,
-      everyNWillResearcher: 3,
+
       isModelFit: false,
     };
   },
@@ -107,7 +112,7 @@ export default {
       await Promise.all(this.agents.map(this.predict));
       this.currentStep += 1;
 
-      if (this.currentStep === this.agents.length) {
+      if (this.currentStep === this.maxStep) {
         this.isModelFit = true;
       }
 
@@ -145,7 +150,7 @@ export default {
 
           this.isModelFit = true;
         } else {
-          this.saveLearning({ field: agent.field, label: [0.4] });
+          this.saveLearning({ field: agent.field, label: [0.3] });
         }
       } else {
         this.saveLearning({ field: agent.field, label: [0] });
@@ -180,8 +185,8 @@ export default {
         ],
       }));
 
-      this.games += 1;
       this.currentStep = 0;
+      this.games += 1;
     },
   },
 };
