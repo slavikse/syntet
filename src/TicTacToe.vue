@@ -5,19 +5,16 @@
     </div>
 
     <div
-      v-for="({ field }, agentIndex) in agents"
+      v-for="(agent, agentIndex) in agents"
       :key="agentIndex"
       class="field"
     >
       <div
-        v-for="(sign, signIndex) in field"
+        v-for="(sign, signIndex) in agent.field"
         :key="`${agentIndex}:${signIndex}`"
         class="cell"
       >
-        <div
-          v-if="sign === 1"
-          class="agent"
-        >
+        <div v-if="sign === 1">
           X
         </div>
       </div>
@@ -33,54 +30,32 @@
 import * as tf from '@tensorflow/tfjs';
 import { victoryCheckGroups } from './utils';
 
+// todo
+let isModelFit = false;
+
+/* eslint-disable no-plusplus */
 export default {
   name: 'TicTacToe',
 
   data() {
     return {
       model: tf.sequential(),
-      // Лучшие агенты в поколении из training набора на которых будет обучаться модель.
       learning: {
         inputs: [],
         labels: [],
       },
       games: 0,
       victories: 0,
-
-      // todo в цикл
-      agents: [
-        {
-          id: 0,
-          field: [
-            0, 0, 0,
-            0, 0, 0,
-            0, 0, 0,
-          ],
-        },
-        {
-          id: 1,
-          field: [
-            0, 0, 0,
-            0, 0, 0,
-            0, 0, 0,
-          ],
-        },
-        {
-          id: 2,
-          field: [
-            0, 0, 0,
-            0, 0, 0,
-            0, 0, 0,
-          ],
-        },
-      ],
-      currentStep: 0,
       fieldSize: 9,
+      agents: [],
+      agentsCount: 5,
+      currentStep: 0,
     };
   },
 
   async mounted() {
     this.setupModel();
+    this.agentsSetting();
     await this.modelPredict();
   },
 
@@ -113,34 +88,23 @@ export default {
       });
     },
 
+    agentsSetting() {
+      for (let i = 0; i < this.agentsCount; i++) {
+        this.agents.push({
+          id: i,
+          field: [
+            0, 0, 0,
+            0, 0, 0,
+            0, 0, 0,
+          ],
+        });
+      }
+    },
+
     async modelPredict() {
-      let isModelFit = false;
+      isModelFit = false;
 
-      await Promise.all(this.agents.map(async (agent) => {
-        const [prediction] = await this.model.predict(tf.tensor2d([agent.field])).data();
-        const cellIndex = this.getCellIndex(prediction);
-
-        if (agent.field[cellIndex] === 0) {
-          agent.field.splice(cellIndex, 1, 1);
-
-          // sign: 1 - Это крестик. X.
-          const label = victoryCheckGroups.horizontalGroup({ cells: agent.field, sign: 1 })
-            || victoryCheckGroups.verticalGroup({ cells: agent.field, sign: 1, start: 0, step: 2 })
-            || victoryCheckGroups.obliquelyGroup({ cells: agent.field, sign: 1 });
-
-          if (label) {
-            this.victories += 1;
-            this.saveTraining({ field: agent.field, label: [1] });
-
-            isModelFit = true;
-          } else {
-            this.saveTraining({ field: agent.field, label: [0.3] });
-          }
-        } else {
-          this.saveTraining({ field: agent.field, label: [0] });
-        }
-      }));
-
+      await Promise.all(this.agents.map(this.predict));
       this.currentStep += 1;
 
       if (this.currentStep === this.agents.length) {
@@ -151,14 +115,33 @@ export default {
         await this.modelFit();
       }
 
-      // Замедление прогноза для каждого актёра.
-      // await new Promise((resolve) => {
-      //   setTimeout(() => {
-      //     resolve();
-      //   }, 200);
-      // });
-
       await this.modelPredict();
+    },
+
+    // todo getRandomPredict Math.random()
+    async predict(agent) {
+      const [prediction] = await this.model.predict(tf.tensor2d([agent.field])).data();
+      const cellIndex = this.getCellIndex(prediction);
+
+      if (agent.field[cellIndex] === 0) {
+        agent.field.splice(cellIndex, 1, 1);
+
+        // sign: 1 - Это крестик (X).
+        const label = victoryCheckGroups.horizontalGroup({ cells: agent.field, sign: 1 })
+          || victoryCheckGroups.verticalGroup({ cells: agent.field, sign: 1, start: 0, step: 2 })
+          || victoryCheckGroups.obliquelyGroup({ cells: agent.field, sign: 1 });
+
+        if (label) {
+          this.victories += 1;
+          this.saveTraining({ field: agent.field, label: [1] });
+
+          isModelFit = true;
+        } else {
+          this.saveTraining({ field: agent.field, label: [0.2] });
+        }
+      } else {
+        this.saveTraining({ field: agent.field, label: [0] });
+      }
     },
 
     getCellIndex(prediction) {
@@ -176,19 +159,20 @@ export default {
         tf.tensor2d(this.learning.labels),
       );
 
-      this.games += 1;
       this.agentReset();
     },
 
     agentReset() {
-      this.agents = this.agents.map((agent, index) => ({
-        id: index,
+      this.agents = this.agents.map(agent => ({
+        id: agent.id,
         field: [
           0, 0, 0,
           0, 0, 0,
           0, 0, 0,
         ],
       }));
+
+      this.games += 1;
       this.currentStep = 0;
     },
   },
@@ -196,33 +180,30 @@ export default {
 </script>
 
 <style scoped>
-/* todo расположение нескольких блоков с полями. */
 .TicTacToe {
-  display: grid;
-  justify-content: center;
-  align-items: center;
-  height: 100vh;
+  display: flex;
+  flex-wrap: wrap;
+  padding-top: 1.5rem;
   user-select: none;
 }
 
 .stat {
   position: absolute;
-  top: 0.2rem;
-  width: 100%;
-  text-align: center;
-  font-size: 1.2rem;
+  top: 0;
+  left: 1rem;
   color: white;
 }
 
 .field {
   --quantity-rows: 3;
   --quantity-columns: 3;
-  --square-size: 5rem;
+  --square-size: 1.4rem;
 
+  margin: 2px;
   display: grid;
   grid-template-rows: repeat(var(--quantity-rows), var(--square-size));
   grid-template-columns: repeat(var(--quantity-columns), var(--square-size));
-  grid-gap: 0.5rem;
+  grid-gap: 1px;
 }
 
 .cell {
@@ -230,9 +211,5 @@ export default {
   justify-content: center;
   align-items: center;
   background-color: seagreen;
-}
-
-.agent {
-  font-size: 2rem;
 }
 </style>
