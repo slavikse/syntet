@@ -30,9 +30,6 @@
 import * as tf from '@tensorflow/tfjs';
 import { victoryCheckGroups } from './utils';
 
-// todo
-let isModelFit = false;
-
 /* eslint-disable no-plusplus */
 export default {
   name: 'TicTacToe',
@@ -50,6 +47,9 @@ export default {
       agents: [],
       agentsCount: 5,
       currentStep: 0,
+      everyNWillResearcherCounter: 0,
+      everyNWillResearcher: 3,
+      isModelFit: false,
     };
   },
 
@@ -102,25 +102,33 @@ export default {
     },
 
     async modelPredict() {
-      isModelFit = false;
+      this.isModelFit = false;
 
       await Promise.all(this.agents.map(this.predict));
       this.currentStep += 1;
 
       if (this.currentStep === this.agents.length) {
-        isModelFit = true;
+        this.isModelFit = true;
       }
 
-      if (isModelFit) {
+      if (this.isModelFit) {
         await this.modelFit();
       }
 
       await this.modelPredict();
     },
 
-    // todo getRandomPredict Math.random()
     async predict(agent) {
-      const [prediction] = await this.model.predict(tf.tensor2d([agent.field])).data();
+      let prediction;
+
+      if (this.everyNWillResearcherCounter === this.everyNWillResearcher) {
+        this.everyNWillResearcherCounter = 0;
+        prediction = Math.random();
+      } else {
+        this.everyNWillResearcherCounter += 1;
+        [prediction] = await this.model.predict(tf.tensor2d([agent.field])).data();
+      }
+
       const cellIndex = this.getCellIndex(prediction);
 
       if (agent.field[cellIndex] === 0) {
@@ -133,14 +141,14 @@ export default {
 
         if (label) {
           this.victories += 1;
-          this.saveTraining({ field: agent.field, label: [1] });
+          this.saveLearning({ field: agent.field, label: [1] });
 
-          isModelFit = true;
+          this.isModelFit = true;
         } else {
-          this.saveTraining({ field: agent.field, label: [0.2] });
+          this.saveLearning({ field: agent.field, label: [0.4] });
         }
       } else {
-        this.saveTraining({ field: agent.field, label: [0] });
+        this.saveLearning({ field: agent.field, label: [0] });
       }
     },
 
@@ -148,7 +156,7 @@ export default {
       return Math.round(prediction * this.fieldSize);
     },
 
-    saveTraining({ field, label }) {
+    saveLearning({ field, label }) {
       this.learning.inputs.push(field);
       this.learning.labels.push(label);
     },
