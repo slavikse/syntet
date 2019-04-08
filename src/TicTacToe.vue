@@ -10,13 +10,15 @@
       class="field"
     >
       <div
-        v-for="(sign, signIndex) in agent.field"
-        :key="`${agentIndex}:${signIndex}`"
-        class="cell"
+        v-for="(cell, cellIndex) in agent.field"
+        :key="`${agentIndex}:${cellIndex}`"
+        :class="[
+          'cell',
+          { 'researcher': (agentIndex + 1) % (everyNWillResearcher + 1) === 0 }
+        ]"
+        @click="setSign(agent, cellIndex)"
       >
-        <div v-if="sign === 1">
-          X
-        </div>
+        {{ cell }}
       </div>
     </div>
   </div>
@@ -28,6 +30,8 @@
 
 import * as tf from '@tensorflow/tfjs';
 import { victoryCheckGroups } from './utils';
+
+const isAutomatic = true;
 
 /* eslint-disable no-plusplus */
 export default {
@@ -41,15 +45,14 @@ export default {
         labels: [],
       },
 
-      currentStep: 0,
-      maxStep: 10,
-
       agents: [],
-      fieldSize: 9,
-      agentsCount: 10,
+      agentsCount: 50,
+      // Игровое поле: agents.length - 1
+      fieldSize: 9 - 1,
+      currentStep: 0,
 
-      everyNWillResearcher: 8,
       everyNWillResearcherCounter: 0,
+      everyNWillResearcher: 9,
 
       games: 0,
       victories: 0,
@@ -61,7 +64,10 @@ export default {
   async mounted() {
     this.setupModel();
     this.agentsSetting();
-    await this.modelPredict();
+
+    if (isAutomatic) {
+      await this.modelPredict();
+    }
   },
 
   methods: {
@@ -97,10 +103,12 @@ export default {
       for (let i = 0; i < this.agentsCount; i++) {
         this.agents.push({
           id: i,
+          // X | O
+          sign: 'X',
           field: [
-            0, 0, 0,
-            0, 0, 0,
-            0, 0, 0,
+            '', '', '',
+            '', '', '',
+            '', '', '',
           ],
         });
       }
@@ -112,7 +120,7 @@ export default {
       await Promise.all(this.agents.map(this.predict));
       this.currentStep += 1;
 
-      if (this.currentStep === this.maxStep) {
+      if (this.currentStep === this.fieldSize + 1) {
         this.isModelFit = true;
       }
 
@@ -120,10 +128,15 @@ export default {
         await this.modelFit();
       }
 
+      // Замедлялка.
+      // await new Promise(resolve => setTimeout(resolve, 100));
       await this.modelPredict();
     },
 
+    // agent.field - массив символов для отображения: X|O.
+    // field - массив значений для обработки, если ячейка не пуста, она равна 1.
     async predict(agent) {
+      const field = agent.field.map(cell => cell.length);
       let prediction;
 
       if (this.everyNWillResearcherCounter === this.everyNWillResearcher) {
@@ -131,34 +144,43 @@ export default {
         prediction = Math.random();
       } else {
         this.everyNWillResearcherCounter += 1;
-        [prediction] = await this.model.predict(tf.tensor2d([agent.field])).data();
+        [prediction] = await this.model.predict(tf.tensor2d([field])).data();
       }
 
       const cellIndex = this.getCellIndex(prediction);
+      const { sign } = agent;
 
-      if (agent.field[cellIndex] === 0) {
-        agent.field.splice(cellIndex, 1, 1);
+      if (agent.field[cellIndex].length === 0) {
+        agent.field.splice(cellIndex, 1, sign);
 
-        // sign: 1 - Это крестик (X).
-        const label = victoryCheckGroups.horizontalGroup({ cells: agent.field, sign: 1 })
-          || victoryCheckGroups.verticalGroup({ cells: agent.field, sign: 1, start: 0, step: 2 })
-          || victoryCheckGroups.obliquelyGroup({ cells: agent.field, sign: 1 });
+        const label = victoryCheckGroups.horizontalGroup({ field: agent.field, sign })
+          || victoryCheckGroups.verticalGroup({ field: agent.field, sign, start: 0, step: 2 })
+          || victoryCheckGroups.obliquelyGroup({ field: agent.field, sign });
 
         if (label) {
           this.victories += 1;
-          this.saveLearning({ field: agent.field, label: [1] });
-
           this.isModelFit = true;
+          this.saveLearning({ field, label: [1] });
         } else {
-          this.saveLearning({ field: agent.field, label: [0.3] });
+          this.saveLearning({ field, label: [0.3] });
         }
       } else {
-        this.saveLearning({ field: agent.field, label: [0] });
+        this.saveLearning({ field, label: [0] });
       }
+
+      this.swapSign(agent);
     },
 
     getCellIndex(prediction) {
       return Math.round(prediction * this.fieldSize);
+    },
+
+    swapSign(agent) {
+      if (agent.sign === 'X') {
+        agent.sign = 'O';
+      } else {
+        agent.sign = 'X';
+      }
     },
 
     saveLearning({ field, label }) {
@@ -178,15 +200,33 @@ export default {
     agentReset() {
       this.agents = this.agents.map(agent => ({
         id: agent.id,
+        // X | O
+        sign: 'X',
         field: [
-          0, 0, 0,
-          0, 0, 0,
-          0, 0, 0,
+          '', '', '',
+          '', '', '',
+          '', '', '',
         ],
       }));
 
+      this.everyNWillResearcherCounter = 0;
       this.currentStep = 0;
       this.games += 1;
+    },
+
+    setSign(agent, cellIndex) {
+      if (!isAutomatic) {
+        agent.field.splice(cellIndex, 1, agent.sign);
+        const { field, sign } = agent;
+
+        const label = victoryCheckGroups.horizontalGroup({ field, sign })
+          || victoryCheckGroups.verticalGroup({ field, sign, start: 0, step: 2 })
+          || victoryCheckGroups.obliquelyGroup({ field, sign });
+
+        console.log('sign / label', sign, label);
+
+        this.swapSign(agent);
+      }
     },
   },
 };
@@ -210,9 +250,9 @@ export default {
 .field {
   --quantity-rows: 3;
   --quantity-columns: 3;
-  --square-size: 1.4rem;
+  --square-size: 2rem;
 
-  margin: 2px;
+  margin: 5px;
   display: grid;
   grid-template-rows: repeat(var(--quantity-rows), var(--square-size));
   grid-template-columns: repeat(var(--quantity-columns), var(--square-size));
@@ -223,6 +263,11 @@ export default {
   display: flex;
   justify-content: center;
   align-items: center;
+  font-size: 1.5rem;
   background-color: seagreen;
+}
+
+.researcher {
+  background-color: yellowgreen;
 }
 </style>
