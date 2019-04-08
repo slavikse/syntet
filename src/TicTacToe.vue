@@ -1,7 +1,9 @@
 <template>
   <div class="TicTacToe">
     <div class="stat">
-      Игр: {{ games }} | Побед: {{ victories }}
+      Игр: {{ games }}
+      | Агентов на игру: {{ agentsCount }}
+      | Исследователей (светлые сетки): {{ agentsCount / everyNWillResearcher }}
     </div>
 
     <div
@@ -14,7 +16,10 @@
         :key="`${agentIndex}:${cellIndex}`"
         :class="[
           'cell',
-          { 'researcher': (agentIndex + 1) % (everyNWillResearcher + 1) === 0 }
+          {
+            'researcher': (agentIndex + 1) % (everyNWillResearcher + 1) === 0,
+            'victory': agent.isVictory,
+          }
         ]"
         @click="setSign(agent, cellIndex)"
       >
@@ -29,6 +34,7 @@
 // todo 3 Этап. Сохранение весов лучшей предобученной сети для игры с человеком.
 
 import * as tf from '@tensorflow/tfjs';
+import roundTo from 'round-to';
 import { victoryCheckGroups } from './utils';
 
 const isAutomatic = true;
@@ -40,22 +46,21 @@ export default {
   data() {
     return {
       model: tf.sequential(),
+      // Лучшие агенты в поколении из training набора на которых будет обучаться модель.
       learning: {
         inputs: [],
         labels: [],
       },
 
       agents: [],
-      agentsCount: 50,
+      agentsCount: 48,
       // Игровое поле: agents.length - 1
       fieldSize: 9 - 1,
       currentStep: 0,
+      games: 0,
 
       everyNWillResearcherCounter: 0,
-      everyNWillResearcher: 9,
-
-      games: 0,
-      victories: 0,
+      everyNWillResearcher: 2,
 
       isModelFit: false,
     };
@@ -75,13 +80,13 @@ export default {
       this.model.add(tf.layers.dense({
         inputShape: [9],
         activation: 'sigmoid',
-        units: 256,
+        units: 128,
       }));
 
       // this.model.add(tf.layers.dropout({
       //   rate: 0.1,
       // }));
-
+      //
       // this.model.add(tf.layers.dense({
       //   activation: 'sigmoid',
       //   units: 128,
@@ -105,6 +110,7 @@ export default {
           id: i,
           // X | O
           sign: 'X',
+          isVictory: false,
           field: [
             '', '', '',
             '', '', '',
@@ -120,7 +126,7 @@ export default {
       await Promise.all(this.agents.map(this.predict));
       this.currentStep += 1;
 
-      if (this.currentStep === this.fieldSize + 1) {
+      if (this.currentStep > this.fieldSize) {
         this.isModelFit = true;
       }
 
@@ -136,7 +142,7 @@ export default {
     // agent.field - массив символов для отображения: X|O.
     // field - массив значений для обработки, если ячейка не пуста, она равна 1.
     async predict(agent) {
-      const field = agent.field.map(cell => cell.length);
+      const field = agent.field.map(sign => sign.length);
       let prediction;
 
       if (this.everyNWillResearcherCounter === this.everyNWillResearcher) {
@@ -152,27 +158,29 @@ export default {
 
       if (agent.field[cellIndex].length === 0) {
         agent.field.splice(cellIndex, 1, sign);
+        field.splice(cellIndex, 1, sign.length);
 
         const label = victoryCheckGroups.horizontalGroup({ field: agent.field, sign })
           || victoryCheckGroups.verticalGroup({ field: agent.field, sign, start: 0, step: 2 })
           || victoryCheckGroups.obliquelyGroup({ field: agent.field, sign });
 
         if (label) {
-          this.victories += 1;
+          agent.isVictory = true;
           this.isModelFit = true;
           this.saveLearning({ field, label: [1] });
         } else {
-          this.saveLearning({ field, label: [0.3] });
+          this.saveLearning({ field, label: [0.33] });
         }
       } else {
         this.saveLearning({ field, label: [0] });
       }
 
-      this.swapSign(agent);
+      // todo
+      // this.swapSign(agent);
     },
 
     getCellIndex(prediction) {
-      return Math.round(prediction * this.fieldSize);
+      return roundTo(prediction * this.fieldSize, 0);
     },
 
     swapSign(agent) {
@@ -202,6 +210,7 @@ export default {
         id: agent.id,
         // X | O
         sign: 'X',
+        isVictory: false,
         field: [
           '', '', '',
           '', '', '',
@@ -236,7 +245,7 @@ export default {
 .TicTacToe {
   display: flex;
   flex-wrap: wrap;
-  padding-top: 1.5rem;
+  padding-top: 1.3rem;
   user-select: none;
 }
 
@@ -269,5 +278,9 @@ export default {
 
 .researcher {
   background-color: yellowgreen;
+}
+
+.victory {
+  background-color: brown;
 }
 </style>
