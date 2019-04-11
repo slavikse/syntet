@@ -8,10 +8,10 @@
       ref="container"
       class="container"
       tabindex="0"
-      @keyup.up="handJumpTop"
-      @keyup.right="handJumpRight"
-      @keyup.down="handJumpBottom"
-      @keyup.left="handJumpLeft"
+      @keyup.up="handleJumpTop"
+      @keyup.right="handleJumpRight"
+      @keyup.down="handleJumpBottom"
+      @keyup.left="handleJumpLeft"
     >
       <div class="field cells">
         <div
@@ -516,28 +516,28 @@ export default {
     },
 
     // Специально для ручного управления.
-    async handJumpTop() {
+    async handleJumpTop() {
       const [actor] = this.actors;
 
       this.jumpTop(actor);
       await this.availabilityCheck(actor);
     },
 
-    async handJumpRight() {
+    async handleJumpRight() {
       const [actor] = this.actors;
 
       this.jumpRight(actor);
       await this.availabilityCheck(actor);
     },
 
-    async handJumpBottom() {
+    async handleJumpBottom() {
       const [actor] = this.actors;
 
       this.jumpBottom(actor);
       await this.availabilityCheck(actor);
     },
 
-    async handJumpLeft() {
+    async handleJumpLeft() {
       const [actor] = this.actors;
 
       this.jumpLeft(actor);
