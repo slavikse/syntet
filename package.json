@@ -1,6 +1,6 @@
 {
   "name": "syntet",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "scripts": {
     "serve": "vue-cli-service serve",
     "build": "vue-cli-service build",
@@ -8,7 +8,6 @@
   },
   "dependencies": {
     "@tensorflow/tfjs": "^1.0.4",
-    "round-to": "^3.0.0",
     "vue": "^2.6.10"
   },
   "devDependencies": {

@@ -1,9 +1,7 @@
 <template>
   <div class="TicTacToe">
     <div class="stat">
-      Игр: {{ games }}
-      | Агентов на игру: {{ agentsCount }}
-      | Исследователей (светлые сетки): {{ agentsCount / everyNWillResearcher }}
+      Сыграно игр: {{ games }} | Тёмные поля - исследователи.
     </div>
 
     <div
@@ -14,30 +12,34 @@
       <div
         v-for="(cell, cellIndex) in agent.field"
         :key="`${agentIndex}:${cellIndex}`"
-        :class="[
-          'cell',
-          {
-            'researcher': (agentIndex + 1) % (everyNWillResearcher + 1) === 0,
-            'victory': agent.isVictory,
-          }
-        ]"
+        :class="['cell', {
+          'alive': agent.isAlive,
+          'researcher': agentIndex % everyNWillResearcher === 0,
+          'victory': agent.isVictory,
+        }]"
         @click="setSign(agent, cellIndex)"
       >
-        {{ cell }}
+        <div v-if="cell !== 0">
+          X
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script>
-// todo 2 Этап. Создание площадки для соревнования сетей.
+// todo 1 Этап. Научить сеть играть за крестик - выставлять в ряд 3 символа.
+// todo 2 Этап. Создание площадки для соревнования сетей. Тренировка 2х сетей играть друг с другом.
 // todo 3 Этап. Сохранение весов лучшей предобученной сети для игры с человеком.
 
 import * as tf from '@tensorflow/tfjs';
-import roundTo from 'round-to';
-import { victoryCheckGroups } from './utils';
+import { victoryCheckGroups as hasVictory } from './utils';
 
+const agentsCount = 20;
+const everyNWillResearcher = 4;
 const isAutomatic = true;
+
+let isModelFit = false;
 
 /* eslint-disable no-plusplus */
 export default {
@@ -46,23 +48,21 @@ export default {
   data() {
     return {
       model: tf.sequential(),
+      // Очищаемые перед следующим поколением накопленные данные агентов для обучения.
+      training: {
+        inputs: [],
+        labels: [],
+      },
       // Лучшие агенты в поколении из training набора на которых будет обучаться модель.
       learning: {
         inputs: [],
         labels: [],
       },
-
       agents: [],
-      agentsCount: 48,
-      // Игровое поле: agents.length - 1
-      fieldSize: 9 - 1,
+      fieldSize: 9,
+      everyNWillResearcher,
       currentStep: 0,
       games: 0,
-
-      everyNWillResearcherCounter: 0,
-      everyNWillResearcher: 2,
-
-      isModelFit: false,
     };
   },
 
@@ -80,7 +80,7 @@ export default {
       this.model.add(tf.layers.dense({
         inputShape: [9],
         activation: 'sigmoid',
-        units: 128,
+        units: 256,
       }));
 
       // this.model.add(tf.layers.dropout({
@@ -105,94 +105,98 @@ export default {
     },
 
     agentsSetting() {
-      for (let i = 0; i < this.agentsCount; i++) {
+      for (let i = 0; i < agentsCount; i++) {
         this.agents.push({
           id: i,
-          // X | O
-          sign: 'X',
+          step: 0,
+          isAlive: true,
           isVictory: false,
           field: [
-            '', '', '',
-            '', '', '',
-            '', '', '',
+            0, 0, 0,
+            0, 0, 0,
+            0, 0, 0,
           ],
         });
       }
     },
 
     async modelPredict() {
-      this.isModelFit = false;
+      isModelFit = false;
 
       await Promise.all(this.agents.map(this.predict));
       this.currentStep += 1;
 
       if (this.currentStep > this.fieldSize) {
-        this.isModelFit = true;
+        isModelFit = true;
       }
 
-      if (this.isModelFit) {
+      if (isModelFit) {
         await this.modelFit();
       }
 
       // Замедлялка.
-      // await new Promise(resolve => setTimeout(resolve, 100));
+      // await new Promise(resolve => setTimeout(resolve, 1000));
       await this.modelPredict();
     },
 
     // agent.field - массив символов для отображения: X|O.
     // field - массив значений для обработки, если ячейка не пуста, она равна 1.
-    async predict(agent) {
-      const field = agent.field.map(sign => sign.length);
-      let prediction;
+    async predict(agent, agentIndex) {
+      if (agent.isAlive) {
+        let prediction;
 
-      if (this.everyNWillResearcherCounter === this.everyNWillResearcher) {
-        this.everyNWillResearcherCounter = 0;
-        prediction = Math.random();
-      } else {
-        this.everyNWillResearcherCounter += 1;
-        [prediction] = await this.model.predict(tf.tensor2d([field])).data();
-      }
-
-      const cellIndex = this.getCellIndex(prediction);
-      const { sign } = agent;
-
-      if (agent.field[cellIndex].length === 0) {
-        agent.field.splice(cellIndex, 1, sign);
-        field.splice(cellIndex, 1, sign.length);
-
-        const label = victoryCheckGroups.horizontalGroup({ field: agent.field, sign })
-          || victoryCheckGroups.verticalGroup({ field: agent.field, sign, start: 0, step: 2 })
-          || victoryCheckGroups.obliquelyGroup({ field: agent.field, sign });
-
-        if (label) {
-          agent.isVictory = true;
-          this.isModelFit = true;
-          this.saveLearning({ field, label: [1] });
+        if (agentIndex % everyNWillResearcher === 0) {
+          prediction = Math.random();
         } else {
-          this.saveLearning({ field, label: [0.33] });
+          [prediction] = await this.model.predict(tf.tensor2d([agent.field])).data();
         }
-      } else {
-        this.saveLearning({ field, label: [0] });
-      }
 
-      // todo
-      // this.swapSign(agent);
+        const cellIndex = this.getCellIndex(prediction);
+
+        if (agent.field[cellIndex] === 0) {
+          agent.step += 1;
+          agent.field.splice(cellIndex, 1, agent.step / this.fieldSize);
+
+          /* eslint-disable no-confusing-arrow */
+          const field = agent.field.map(cell => cell > 0 ? 1 : 0);
+          const isWin = hasVictory.horizontalGroup({ field, sign: 1 })
+            || hasVictory.verticalGroup({ field, sign: 1, start: 0, step: 2 })
+            || hasVictory.obliquelyGroup({ field, sign: 1 });
+
+          if (isWin) {
+            agent.isAlive = false;
+            agent.isVictory = true;
+
+            this.saveLearning({
+              input: agent.field,
+              // todo описание! сумма всех значений?
+              label: [1],
+            });
+          } else {
+            this.saveLearning({
+              input: agent.field,
+              // todo описание!
+              label: [0.5],
+            });
+          }
+        } else {
+          agent.isAlive = false;
+
+          this.saveLearning({
+            input: agent.field,
+            // todo описание!
+            label: [0],
+          });
+        }
+      }
     },
 
     getCellIndex(prediction) {
-      return roundTo(prediction * this.fieldSize, 0);
+      return Math.round(prediction * (this.fieldSize - 1));
     },
 
-    swapSign(agent) {
-      if (agent.sign === 'X') {
-        agent.sign = 'O';
-      } else {
-        agent.sign = 'X';
-      }
-    },
-
-    saveLearning({ field, label }) {
-      this.learning.inputs.push(field);
+    saveLearning({ input, label }) {
+      this.learning.inputs.push(input);
       this.learning.labels.push(label);
     },
 
@@ -208,33 +212,31 @@ export default {
     agentReset() {
       this.agents = this.agents.map(agent => ({
         id: agent.id,
-        // X | O
-        sign: 'X',
+        step: 0,
+        isAlive: true,
         isVictory: false,
         field: [
-          '', '', '',
-          '', '', '',
-          '', '', '',
+          0, 0, 0,
+          0, 0, 0,
+          0, 0, 0,
         ],
       }));
 
-      this.everyNWillResearcherCounter = 0;
       this.currentStep = 0;
       this.games += 1;
     },
 
     setSign(agent, cellIndex) {
-      if (!isAutomatic) {
-        agent.field.splice(cellIndex, 1, agent.sign);
-        const { field, sign } = agent;
+      if (!isAutomatic && agent.field[cellIndex] === 0) {
+        agent.step += 1;
+        agent.field.splice(cellIndex, 1, agent.step / this.fieldSize);
 
-        const label = victoryCheckGroups.horizontalGroup({ field, sign })
-          || victoryCheckGroups.verticalGroup({ field, sign, start: 0, step: 2 })
-          || victoryCheckGroups.obliquelyGroup({ field, sign });
+        const field = agent.field.map(cell => cell > 0 ? 1 : 0);
+        const isWin = hasVictory.horizontalGroup({ field, sign: 1 })
+          || hasVictory.verticalGroup({ field, sign: 1, start: 0, step: 2 })
+          || hasVictory.obliquelyGroup({ field, sign: 1 });
 
-        console.log('sign / label', sign, label);
-
-        this.swapSign(agent);
+        console.log('isWin', isWin);
       }
     },
   },
@@ -259,9 +261,9 @@ export default {
 .field {
   --quantity-rows: 3;
   --quantity-columns: 3;
-  --square-size: 2rem;
+  --square-size: 4rem;
 
-  margin: 5px;
+  margin: 1rem;
   display: grid;
   grid-template-rows: repeat(var(--quantity-rows), var(--square-size));
   grid-template-columns: repeat(var(--quantity-columns), var(--square-size));
@@ -273,11 +275,15 @@ export default {
   justify-content: center;
   align-items: center;
   font-size: 1.5rem;
+  background-color: dimgrey;
+}
+
+.alive {
   background-color: seagreen;
 }
 
 .researcher {
-  background-color: yellowgreen;
+  background-color: #222;
 }
 
 .victory {
