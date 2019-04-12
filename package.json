@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@tensorflow/tfjs": "^1.0.4",
+    "@tweenjs/tween.js": "^17.3.0",
     "vue": "^2.6.10"
   },
   "devDependencies": {
