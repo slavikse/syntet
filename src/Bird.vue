@@ -3,7 +3,7 @@
     ref="root"
     class="Bird"
     tabindex="0"
-    @keydown.up="agentUp"
+    @keydown.up="agentUp(agents[0])"
   >
     <div class="field">
       <div
@@ -29,15 +29,10 @@ import TWEEN from '@tweenjs/tween.js';
 
 let rafId;
 
-const agentState = {
-  heightUp: { y: 14 },
-  heightDown: { y: 0 },
-  flightTime: 400,
-  tween: { stop() {} },
-};
-
-// 20 - ширина игрового поля. 2 - ширина агента.
-const maximumWidthToIntersection = 20 - 2;
+// С учётом размеров агента.
+const fieldSize = 18;
+// 2 - ширина агента.
+const maximumDistanceToIntersection = fieldSize - 2;
 
 export default {
   name: 'Bird',
@@ -55,16 +50,21 @@ export default {
         inputs: [],
         labels: [],
       },
+      // todo хранить saveLearning в агенте, а при обучении брать 5 самых долго живущих.
+      // todo добавить параметр долгоживущего. занести его в сеть для обучения?
       agents: [
         {
           id: `agents_${1}`,
           x: 0,
-          y: 4,
-          // todo что то с ближайшей преградой?
-          //   сейчас одна преграда появляется через равное время.
+          y: 0,
           width: 2,
           height: 2,
+          distance: maximumDistanceToIntersection,
           isIntersected: false,
+          heightUp: { y: 18 },
+          heightDown: { y: 0 },
+          flightTime: 300,
+          tween: { stop() {} },
         },
       ],
       walls: [
@@ -74,28 +74,29 @@ export default {
           y: 0,
           width: 2,
           height: 4,
-          movementTime: 1000,
+          movementTime: 2000,
           from: {
             x: 20,
           },
           to: {
             x: -2,
           },
+          tween: { stop() {} },
         },
-        // {
-        //   id: `walls_${2}`,
-        //   x: 18 * 1.3,
-        //   y: 0,
-        //   width: 2,
-        //   height: 4,
-        //   movementTime: 1000 * 1.3,
-        //   from: {
-        //     x: 18 * 1.3,
-        //   },
-        //   to: {
-        //     x: -2,
-        //   },
-        // },
+        {
+          id: `walls_${2}`,
+          x: 30,
+          y: 16,
+          width: 2,
+          height: 4,
+          movementTime: 3000,
+          from: {
+            x: 30,
+          },
+          to: {
+            x: -2,
+          },
+        },
         // {
         //   id: `walls_${3}`,
         //   x: 18 * 1.7,
@@ -116,12 +117,16 @@ export default {
 
   async mounted() {
     this.setupModel();
+    this.agentSetting();
     rafId = requestAnimationFrame(this.gameLoop);
 
-    this.agentSetting();
-    this.startWallsMovement();
-
     await this.modelPredict();
+    this.restartWallsMovement();
+
+    // window.check = () => {
+    //   const [wall] = this.walls;
+    //   this.hasWallIntersectionWithAgent(wall);
+    // };
   },
 
   destroyed() {
@@ -130,11 +135,10 @@ export default {
 
   methods: {
     setupModel() {
-      // y, step.
       this.model.add(tf.layers.dense({
         inputShape: [2],
         activation: 'sigmoid',
-        units: 128,
+        units: 64,
       }));
 
       // this.model.add(tf.layers.dropout({
@@ -146,7 +150,6 @@ export default {
       //   units: 128,
       // }));
 
-      // jump
       this.model.add(tf.layers.dense({
         activation: 'sigmoid',
         units: 1,
@@ -157,26 +160,6 @@ export default {
         loss: 'meanSquaredError',
         metrics: ['accuracy'],
       });
-    },
-
-    async modelPredict() {
-      await Promise.all(this.agents.map(this.predict));
-
-      // await this.modelFit();
-
-      // Замедлялка.
-      // await new Promise(resolve => setTimeout(resolve, 1000));
-      await this.modelPredict();
-    },
-
-    async predict(agent) {
-      const [prediction] = await this.model.predict(tf.tensor2d([agent.field])).data();
-      console.log('prediction', prediction);
-    },
-
-    gameLoop(time) {
-      rafId = requestAnimationFrame(this.gameLoop);
-      TWEEN.update(time);
     },
 
     // todo настройка по первому объекту - все одинаковые.
@@ -191,80 +174,156 @@ export default {
       this.$refs.root.style.setProperty('--wall-height', `${wall.height}rem`);
     },
 
-    agentUp() {
-      agentState.tween.stop();
-
-      // todo
-      const [agent] = this.agents;
-
-      agentState.tween = new TWEEN.Tween(agent)
-        .to(agentState.heightUp, agentState.flightTime)
-        .easing(TWEEN.Easing.Quadratic.Out)
-        .onComplete(this.agentDown)
-        .start();
+    gameLoop(time) {
+      rafId = requestAnimationFrame(this.gameLoop);
+      TWEEN.update(time);
     },
 
-    agentDown() {
-      // todo
-      const [agent] = this.agents;
+    async modelPredict() {
+      await Promise.all(this.agents.map(this.predict));
+      // todo вместо цикла, добавить счетчик агентов в строю и сбрасывать после обучения сети.
+      const countNotIntersected = this.agents.filter(agent => !agent.isIntersected).length;
 
-      agentState.tween = new TWEEN.Tween(agent)
-        .to(agentState.heightDown, agentState.flightTime)
-        .easing(TWEEN.Easing.Quadratic.In)
-        .onComplete(this.agentFell)
-        .start();
+      if (countNotIntersected === 0) {
+        this.agentsReset();
+        this.stopWallsMovement();
+        await this.modelFit();
+        this.restartWallsMovement();
+      }
+
+      // Замедлялка прогнозирования.
+      await new Promise(resolve => setTimeout(resolve, 500));
+      this.modelPredict();
     },
 
-    agentFell() {
-      console.log('agentFell');
-    },
+    async predict(agent) {
+      if (!agent.isIntersected) {
+        const [prediction] = await this.model.predict(tf.tensor2d([
+          [
+            agent.y / fieldSize,
+            agent.distance / fieldSize,
+          ],
+        ])).data();
 
-    startWallsMovement() {
-      this.walls.forEach(this.runWallMovement);
-    },
+        console.log('prediction', prediction);
 
-    runWallMovement(wall) {
-      new TWEEN.Tween(wall)
-        .to(wall.to, wall.movementTime)
-        .onUpdate(() => this.hasWallIntersectionWithAgent(wall))
-        .onComplete(() => this.endWallMovement(wall))
-        .start();
-    },
-
-    // todo
-    hasWallIntersectionWithAgent(wall) {
-      const [agent] = this.agents;
-
-      const isTopBorderAgent = agent.y + agent.height > wall.y;
-      const isRightBorderAgent = agent.x + agent.width > wall.x;
-      const isBottomBorderAgent = agent.y < wall.y + wall.height;
-
-      const isDistanceWallFurtherAgent = wall.x > agent.x + agent.width;
-
-      switch (true) {
-        case isTopBorderAgent
-        && isRightBorderAgent
-        && isBottomBorderAgent:
-          // todo является окончаем игры агента.
-          agent.isIntersected = true;
-
-          // todo del
-          setTimeout(() => {
-            agent.isIntersected = false;
-          }, 1000);
-          break;
-
-        case isDistanceWallFurtherAgent:
-          console.log('wall', wall.x);
-          break;
-
-        default:
+        if (prediction > 0.5) {
+          this.agentUp(agent);
+        }
       }
     },
 
-    endWallMovement(wall) {
+    agentUp(agent) {
+      agent.tween.stop();
+
+      agent.tween = new TWEEN.Tween(agent)
+        .to(agent.heightUp, agent.flightTime)
+        .easing(TWEEN.Easing.Quadratic.Out)
+        .onComplete(() => this.agentDown(agent))
+        .start();
+    },
+
+    agentDown(agent) {
+      agent.tween = new TWEEN.Tween(agent)
+        .to(agent.heightDown, agent.flightTime)
+        .easing(TWEEN.Easing.Quadratic.In)
+        .onComplete(() => this.agentFell(agent))
+        .start();
+    },
+
+    // todo сброс состояния, когда все агенты потерпели неудачу.
+    agentFell(agent) {
+      console.log('agentFell', agent);
+    },
+
+    // todo множественные агенты
+    agentsReset() {
+      const [agent] = this.agents;
+
+      agent.tween.stop();
+
+      agent.y = 0;
+      agent.distance = maximumDistanceToIntersection;
+      agent.isIntersected = false;
+    },
+
+    stopWallsMovement() {
+      this.walls.forEach(wall => wall.tween.stop());
+    },
+
+    restartWallsMovement() {
+      this.walls.forEach(this.rerunWallMovement);
+    },
+
+    rerunWallMovement(wall) {
       wall.x = wall.from.x;
-      this.runWallMovement(wall);
+
+      wall.tween = new TWEEN.Tween(wall)
+        .to(wall.to, wall.movementTime)
+        .onUpdate(() => this.hasWallIntersectionWithAgent(wall))
+        .onComplete(() => this.rerunWallMovement(wall))
+        .start();
+    },
+
+    // todo множественные агенты
+    hasWallIntersectionWithAgent(wall) {
+      const [agent] = this.agents;
+
+      if (!agent.isIntersected) {
+        const isTopBorderAgent = agent.y + agent.height > wall.y;
+        const isRightBorderAgent = agent.x + agent.width > wall.x;
+        const isBottomBorderAgent = agent.y < wall.y + wall.height;
+
+        if (wall.x - agent.width >= 0) {
+          const distance = wall.x - agent.width;
+
+          if (distance < agent.distance) {
+            agent.distance = distance;
+          }
+        }
+
+        if (
+          isTopBorderAgent
+          && isRightBorderAgent
+          && isBottomBorderAgent
+        ) {
+          agent.isIntersected = true;
+
+          // todo сохраняется очень много информации. 60fps.
+          this.saveLearning({
+            input: [
+              agent.y / fieldSize,
+              agent.distance / fieldSize,
+            ],
+            label: [0],
+          });
+        } else {
+          this.saveLearning({
+            input: [
+              agent.y / fieldSize,
+              agent.distance / fieldSize,
+            ],
+            label: [1],
+          });
+        }
+      }
+    },
+
+    // todo training
+    saveLearning({ input, label }) {
+      // console.log('input', input);
+      // console.log('label', label);
+
+      this.learning.inputs.push(input);
+      this.learning.labels.push(label);
+    },
+
+    // todo training и отбор лучших в поколении?
+    async modelFit() {
+      await this.model.fit(
+        tf.tensor2d(this.learning.inputs),
+        tf.tensor2d(this.learning.labels),
+      );
     },
   },
 };
