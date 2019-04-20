@@ -39,8 +39,6 @@ const agentsCount = 20;
 const everyNWillResearcher = 4;
 const isAutomatic = true;
 
-let isModelFit = false;
-
 /* eslint-disable no-plusplus */
 export default {
   name: 'TicTacToe',
@@ -80,27 +78,26 @@ export default {
       this.model.add(tf.layers.dense({
         inputShape: [9],
         activation: 'sigmoid',
-        units: 256,
+        units: 128,
       }));
 
       // this.model.add(tf.layers.dropout({
       //   rate: 0.1,
       // }));
-      //
+
       // this.model.add(tf.layers.dense({
       //   activation: 'sigmoid',
-      //   units: 128,
+      //   units: 64,
       // }));
 
       this.model.add(tf.layers.dense({
         activation: 'sigmoid',
-        units: 1,
+        units: 9,
       }));
 
       this.model.compile({
-        optimizer: tf.train.adam(0.01),
+        optimizer: tf.train.adamax(0.01),
         loss: 'meanSquaredError',
-        metrics: ['accuracy'],
       });
     },
 
@@ -121,16 +118,10 @@ export default {
     },
 
     async modelPredict() {
-      isModelFit = false;
-
       await Promise.all(this.agents.map(this.predict));
       this.currentStep += 1;
 
-      if (this.currentStep > this.fieldSize) {
-        isModelFit = true;
-      }
-
-      if (isModelFit) {
+      if (this.currentStep === this.fieldSize) {
         await this.modelFit();
       }
 
@@ -143,22 +134,26 @@ export default {
     // field - массив значений для обработки, если ячейка не пуста, она равна 1.
     async predict(agent, agentIndex) {
       if (agent.isAlive) {
-        let prediction;
+        let predictions;
 
         if (agentIndex % everyNWillResearcher === 0) {
-          prediction = Math.random();
+          predictions = this.getRandoms();
         } else {
-          [prediction] = await this.model.predict(tf.tensor2d([agent.field])).data();
+          predictions = await this.model.predict(tf.tensor2d([agent.field])).data();
         }
 
-        const cellIndex = this.getCellIndex(prediction);
+        const cellIndex = this.getCellIndex(predictions);
 
         if (agent.field[cellIndex] === 0) {
           agent.step += 1;
-          agent.field.splice(cellIndex, 1, agent.step / this.fieldSize);
+          // Чем меньше ходов было сделано, тем больше вознаграждение.
+          agent.field.splice(cellIndex, 1, 1 - agent.step / this.fieldSize);
 
           /* eslint-disable no-confusing-arrow */
+          // Поле для проверки выигрыша в алгоритмах.
+          // sign: 1 - подразумевается X.
           const field = agent.field.map(cell => cell > 0 ? 1 : 0);
+
           const isWin = hasVictory.horizontalGroup({ field, sign: 1 })
             || hasVictory.verticalGroup({ field, sign: 1, start: 0, step: 2 })
             || hasVictory.obliquelyGroup({ field, sign: 1 });
@@ -169,30 +164,44 @@ export default {
 
             this.saveLearning({
               input: agent.field,
-              // todo описание! сумма всех значений?
-              label: [1],
+              label: field,
             });
           } else {
-            this.saveLearning({
-              input: agent.field,
-              // todo описание!
-              label: [0.5],
-            });
+            // this.saveLearning({
+            //   input: agent.field,
+            //   // todo описание!
+            //   label: [0.5],
+            // });
           }
         } else {
           agent.isAlive = false;
 
-          this.saveLearning({
-            input: agent.field,
-            // todo описание!
-            label: [0],
-          });
+          // this.saveLearning({
+          //   input: agent.field,
+          //   // todo описание!
+          //   label: [0],
+          // });
         }
       }
     },
 
-    getCellIndex(prediction) {
-      return Math.round(prediction * (this.fieldSize - 1));
+    getRandoms() {
+      return [
+        Math.random(),
+        Math.random(),
+        Math.random(),
+        Math.random(),
+        Math.random(),
+        Math.random(),
+        Math.random(),
+        Math.random(),
+        Math.random(),
+      ];
+    },
+
+    getCellIndex(predictions) {
+      const maximum = Math.max(...predictions);
+      return predictions.indexOf(maximum);
     },
 
     saveLearning({ input, label }) {
