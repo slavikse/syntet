@@ -1,51 +1,64 @@
 <template>
   <div class="TicTacToe">
-    <div class="fields">
-      <div class="stat">
-        Сыграно игр: {{ games }} | Побед: X {{ victories.X }} - O {{ victories.O }}
+    <div class="stat">
+      <div class="title">
+        Победы в состязаниях: X - {{ victories.X }} ˑ O - {{ victories.O }}
       </div>
 
+      <div class="description">
+        Количество тренировок и состязаний: {{ trainingGames + duelGames }}
+      </div>
+    </div>
+
+    <div class="fields">
       <div
         v-for="(agent, agentIndex) in agents.X.concat(agents.O)"
         :key="agentIndex"
         class="field"
       >
         <div
-          v-for="(cell, cellIndex) in agent.field"
+          v-for="(sign, cellIndex) in agent.field"
           :key="`${agentIndex}:${cellIndex}`"
           :class="['cell', {
-            'alive': agent.isAlive,
-            cell,
-            'victory': agent.isVictory,
+            sign,
+            alive: agent.isAlive,
+            victory: agent.isVictory,
           }]"
           @click="setSign(agent, cellIndex)"
         >
-          {{ cell }}
+          {{ sign }}
           <!--{{ agent.rewards[cellIndex].toFixed(1) }}-->
+        </div>
+
+        <div class="caption">
+          Поле игрока: {{ agent.sign }}
         </div>
       </div>
     </div>
 
     <div class="duel-field">
       <div
-        v-for="(cell, cellIndex) in duel.field"
+        v-for="(sign, cellIndex) in duel.field"
         :key="cellIndex"
-        :class="['duel-cell', { cell }]"
+        :class="['cell', { victory: victoriesStatus[sign] }]"
       >
-        {{ cell }}
+        {{ sign }}
       </div>
+
+      <div class="caption">
+        Поле для состязаний
+      </div>
+    </div>
+
+    <div class="fields-description">
+      <div>Первая игра - игроки на своих полях, вторая игра - состязание.</div>
+      <div>Подсветка золотистым - победа.</div>
     </div>
   </div>
 </template>
 
 <script>
-// todo 2 Этап. Тренировка 2х сетей играть друг с другом.
-// сталкивать сети между собой на 100 игр каждые 1000 игр.
-// после 100 игр, каждая сеть получит наигранные веса для обучения.
-
-// todo 3 Этап. Сохранение весов лучшей предобученной сети для игры с человеком.
-
-// todo последовательности ходов
+// todo 3 Этап. Сохранение весов обученной сети для игры с человеком.
 
 import * as tf from '@tensorflow/tfjs';
 import { victoryCheckGroups as hasVictory } from './utils';
@@ -67,10 +80,11 @@ export default {
       },
       agents: { X: [], O: [] },
       victories: { X: 0, O: 0 },
+      victoriesStatus: { X: false, O: false },
 
       fieldSize: 9,
       step: 1,
-      games: 1,
+      trainingGames: 1,
 
       isDuel: false,
       duel: { // Настраивается в startDuel
@@ -81,6 +95,7 @@ export default {
           '', '', '',
         ],
       },
+      duelGames: 1,
     };
   },
 
@@ -142,13 +157,13 @@ export default {
     },
 
     async gameLoop() {
-      // console.log(this.isDuel, this.duel.step);
-
       if (this.isDuel) {
-        // todo
-        // await this.startDuel();
+        await this.startDuel();
+        this.duelGames += 1;
       } else {
-        // this.isDuel = this.games % this.fieldSize === 0;
+        this.isDuel = this.trainingGames % this.fieldSize === 0;
+        this.trainingGames += 1;
+
         await this.startTraining();
       }
 
@@ -156,37 +171,45 @@ export default {
         await new Promise((resolve) => setTimeout(resolve, 100));
       }
 
-      this.games += 1;
       await this.gameLoop();
     },
 
     async startDuel() {
+      // todo объединить?
       await new Promise((resolve) => {
         const agents = this.agents.X.filter(({ isAlive }) => isAlive);
         let count = agents.length;
 
-        agents.forEach(async (agent) => {
-          await this.modelPredict({ model: this.modelX, agent });
-          count -= 1;
+        if (agents.length > 0) {
+          agents.forEach(async (agent) => {
+            await this.modelPredict({ model: this.modelX, agent });
+            count -= 1;
 
-          if (count === 0) {
-            resolve();
-          }
-        });
+            if (count === 0) {
+              resolve();
+            }
+          });
+        } else {
+          resolve();
+        }
       });
 
       await new Promise((resolve) => {
         const agents = this.agents.O.filter(({ isAlive }) => isAlive);
         let count = agents.length;
 
-        agents.forEach(async (agent) => {
-          await this.modelPredict({ model: this.modelO, agent });
-          count -= 1;
+        if (agents.length > 0) {
+          agents.forEach(async (agent) => {
+            await this.modelPredict({ model: this.modelO, agent });
+            count -= 1;
 
-          if (count === 0) {
-            resolve();
-          }
-        });
+            if (count === 0) {
+              resolve();
+            }
+          });
+        } else {
+          resolve();
+        }
       });
 
       if (this.duel.step === this.fieldSize) {
@@ -222,9 +245,6 @@ export default {
           this.modelFit({ model: this.modelO, sign: 'O' }),
         ]);
 
-        this.agentsSetting({ sign: 'X' });
-        this.agentsSetting({ sign: 'O' });
-
         this.step = 1;
       } else {
         this.step += 1;
@@ -233,12 +253,13 @@ export default {
 
     /* eslint-disable no-confusing-arrow */
     async modelPredict({ model, agent }) {
+      const step = this.isDuel ? this.duel.step : this.step;
       let stepInput;
 
-      if (this.step <= 3) {
-        stepInput = this.step / 3;
+      if (step <= 3) {
+        stepInput = step / 3;
       } else {
-        stepInput = 1 - (this.step / this.fieldSize);
+        stepInput = 1 - (step / this.fieldSize);
       }
 
       const predictions = await model.predict(tf.tensor2d([agent.rewards.concat([stepInput])])).data();
@@ -266,10 +287,9 @@ export default {
             sign,
           });
 
-          console.log('isWinner', sign, this.isDuel);
-
           if (this.isDuel) {
             this.victories[sign] += 1;
+            this.victoriesStatus[sign] = true;
           }
         } else {
           agent.rewards[cellIndex] = 0.5;
@@ -302,6 +322,7 @@ export default {
     async modelFit({ model, sign }) {
       if (this.trainingCount[sign] > 0) {
         this.trainingCount[sign] = 0;
+        this.victoriesStatus[sign] = false;
 
         await model.fit(
           tf.tensor2d(this.training[sign].inputs),
@@ -311,6 +332,9 @@ export default {
 
         this.training[sign].inputs = [];
         this.training[sign].labels = [];
+
+        this.agentsSetting({ sign: 'X' });
+        this.agentsSetting({ sign: 'O' });
       }
     },
 
@@ -344,23 +368,35 @@ export default {
   --square-size: 64px;
 
   position: relative;
-  margin: 200px 0 0 200px;
+  margin-top: 200px;
   display: flex;
+  justify-content: center;
+  width: 100%;
   user-select: none;
-}
-
-.fields {
-  position: relative;
-  display: flex;
 }
 
 .stat {
   position: absolute;
   top: 0;
-  margin-top: -20px;
+  margin-top: -50px;
   width: 100%;
   text-align: center;
   color: white;
+}
+
+.stat .title {
+  font-size: 16px;
+  color: gray;
+}
+
+.stat .description {
+  font-size: 14px;
+  color: dimgray;
+}
+
+.fields {
+  position: relative;
+  display: flex;
 }
 
 .field {
@@ -371,31 +407,42 @@ export default {
   grid-gap: 1px;
 }
 
-.cell {
+.field .cell {
   display: flex;
   justify-content: center;
   align-items: center;
   font-size: 30px;
-  background-color: seagreen;
+  color: #999;
+  background-color: #444;
 }
 
-.cell.alive {
+.field .cell.alive {
 }
 
-.cell.X {
-  background-color: black;
+.field:first-child .cell {
+  /*background-color: black;*/
 }
 
-.cell.O {
-  color: black;
-  background-color: white;
+.field:last-child .cell {
+  /*color: black;*/
+  /*background-color: white;*/
 }
 
-.cell.victory {
-  background-color: gold;
+.field .cell.victory {
+  background-color: darkgoldenrod;
+}
+
+.field .caption {
+  position: absolute;
+  bottom: -20px;
+  width: 50%;
+  text-align: center;
+  font-size: 14px;
+  color: dimgray;
 }
 
 .duel-field {
+  position: relative;
   margin: 5px;
   display: grid;
   grid-template-rows: repeat(var(--quantity-rows), var(--square-size));
@@ -403,8 +450,33 @@ export default {
   grid-gap: 1px;
 }
 
-.duel-cell {
-  color: black;
-  background-color: aliceblue;
+.duel-field .cell {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 30px;
+  color: white;
+  background-color: #222;
+}
+
+.duel-field .cell.victory {
+  background-color: gold;
+}
+
+.duel-field .caption {
+  position: absolute;
+  bottom: -25px;
+  width: 100%;
+  text-align: center;
+  font-size: 14px;
+  color: dimgray;
+}
+
+.fields-description {
+  position: absolute;
+  bottom: -80px;
+  width: 100%;
+  text-align: center;
+  color: gray;
 }
 </style>
