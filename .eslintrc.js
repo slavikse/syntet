@@ -12,9 +12,11 @@ module.exports = {
     'no-param-reassign': 'off',
     'object-curly-newline': 'off',
     'vue/no-use-v-if-with-v-for': 'error',
-    'vue/no-v-html': 'warning',
+    'vue/no-v-html': 'warn',
     'vue/html-closing-bracket-spacing': 'error',
     'vue/prop-name-casing': 'error',
+    'no-plusplus': 'off',
+    'max-len': [1, 120, 2],
   },
   parserOptions: {
     parser: 'babel-eslint',
