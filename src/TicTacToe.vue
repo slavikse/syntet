@@ -61,14 +61,18 @@
 
     <div class="ai-vs-human-container">
       <div class="caption">
-        Человек против AI
+        Человек против AI <span>(wip)</span>
+      </div>
+
+      <div class="result">
+        Результаты: X <span>{{ AIvsHuman.victories.X }}</span> ˑ O <span>{{ AIvsHuman.victories.O }}</span>
       </div>
 
       <div class="field">
         <div
           v-for="(sign, cellIndex) in AIvsHuman.field"
-          :key="cellIndex"
-          :class="['cell', { victory: victoriesStatus[sign] }]"
+          :key="`${cellIndex}:${sign}`"
+          :class="['cell', sign, { victory: victoriesStatus[sign] }]"
           @click="setHumanSign(cellIndex)"
         >
           {{ sign }}
@@ -123,6 +127,7 @@ export default {
 
       AIvsHuman: {
         step: 1,
+        victories: { X: 0, O: 0 },
         rewards: [
           0.1, 0.1, 0.1,
           0.1, 0.1, 0.1,
@@ -417,12 +422,18 @@ export default {
         this.AIvsHuman.rewards = this.AIvsHuman.rewards.map((weight) => weight + 0.1);
 
         const isHumanWinner = this.determineWinner({ field, sign: 'X' });
-        // todo если выиграл - остановка и сброс игры. счёткичи
-        console.log('isHumanWinner', isHumanWinner);
 
         this.AIvsHuman.step += 1;
+
+        // todo
+        if (isHumanWinner) {
+          this.AIvsHuman.victories.X += 1;
+          await this.AIvsHumanReset();
+        }
       } else {
         // todo конец игры. игрок проиграл
+        this.AIvsHuman.victories.O += 1;
+        await this.AIvsHumanReset();
       }
 
       let stepInput;
@@ -441,10 +452,38 @@ export default {
         this.AIvsHuman.rewards = this.AIvsHuman.rewards.map((weight) => weight + 0.1);
 
         const isAIWinner = this.determineWinner({ field, sign: 'O' });
-        console.log('isAIWinner', isAIWinner);
+
+        // todo
+        if (isAIWinner) {
+          this.AIvsHuman.victories.O += 1;
+          await this.AIvsHumanReset();
+        }
       } else {
         // todo конец игры. ai проиграл
+        this.AIvsHuman.victories.X += 1;
+
+        field.splice(AICellIndex, 1, 'O');
+        await this.AIvsHumanReset();
       }
+    },
+
+    async AIvsHumanReset() {
+      // await new Promise((resolve) => setTimeout(resolve, 500));
+
+      this.AIvsHuman = {
+        ...this.AIvsHuman,
+        step: 1,
+        rewards: [
+          0.1, 0.1, 0.1,
+          0.1, 0.1, 0.1,
+          0.1, 0.1, 0.1,
+        ],
+        field: [
+          '', '', '',
+          '', '', '',
+          '', '', '',
+        ],
+      };
     },
   },
 };
@@ -583,6 +622,15 @@ export default {
 
 .ai-vs-human-container .caption {
   text-align: center;
+  color: gray;
+}
+
+.ai-vs-human-container .caption span {
+  color: gold;
+}
+
+.ai-vs-human-container .result {
+  text-align: center;
   font-weight: bold;
   color: gray;
 }
@@ -600,7 +648,16 @@ export default {
   justify-content: center;
   align-items: center;
   font-size: 30px;
+  font-weight: bold;
   color: white;
   background-color: #222;
+}
+
+.ai-vs-human-container .field .cell.X {
+  color: #c94c4c;
+}
+
+.ai-vs-human-container .field .cell.O {
+  color: #034f84;
 }
 </style>
