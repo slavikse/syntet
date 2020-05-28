@@ -79,6 +79,7 @@ export default {
 
 .routers .route {
   margin-top: 5px;
+  color: gray;
   cursor: pointer;
   text-decoration: none;
 }
