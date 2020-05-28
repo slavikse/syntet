@@ -182,7 +182,7 @@ export default {
     async modelPredict() {
       await Promise.all(this.agents.map(this.predict));
       // todo вместо цикла, добавить счетчик агентов в строю и сбрасывать после обучения сети.
-      const countNotIntersected = this.agents.filter(agent => !agent.isIntersected).length;
+      const countNotIntersected = this.agents.filter((agent) => !agent.isIntersected).length;
 
       if (countNotIntersected === 0) {
         this.agentsReset();
@@ -192,7 +192,7 @@ export default {
       }
 
       // Замедлялка прогнозирования.
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise((resolve) => setTimeout(resolve, 500));
       this.modelPredict();
     },
 
@@ -248,7 +248,7 @@ export default {
     },
 
     stopWallsMovement() {
-      this.walls.forEach(wall => wall.tween.stop());
+      this.walls.forEach((wall) => wall.tween.stop());
     },
 
     restartWallsMovement() {

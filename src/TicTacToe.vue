@@ -2,11 +2,15 @@
   <div class="TicTacToe">
     <div class="stat">
       <div class="title">
-        Победы в состязаниях: X - {{ victories.X }} ˑ O - {{ victories.O }}
+        Победы в состязаниях: X <span>{{ victories.X }}</span> ˑ O <span>{{ victories.O }}</span>
       </div>
 
       <div class="description">
         Количество тренировок и состязаний: {{ trainingGames + duelGames }}
+      </div>
+
+      <div class="timer">
+        Время обучения в секундах: {{ timer }}
       </div>
     </div>
 
@@ -40,7 +44,7 @@
       <div
         v-for="(sign, cellIndex) in duel.field"
         :key="cellIndex"
-        :class="['cell', { victory: victoriesStatus[sign] }]"
+        :class="['cell', sign, { victory: victoriesStatus[sign] }]"
       >
         {{ sign }}
       </div>
@@ -52,13 +56,30 @@
 
     <div class="fields-description">
       <div>Первая игра - игроки на своих полях, вторая игра - состязание.</div>
-      <div>Подсветка золотистым - победа.</div>
+      <div>Подсветка золотистым - победа. Цель обучения - сводить игру в ничью.</div>
+    </div>
+
+    <div class="ai-vs-human-container">
+      <div class="caption">
+        Человек против AI
+      </div>
+
+      <div class="field">
+        <div
+          v-for="(sign, cellIndex) in AIvsHuman.field"
+          :key="cellIndex"
+          :class="['cell', { victory: victoriesStatus[sign] }]"
+          @click="setHumanSign(cellIndex)"
+        >
+          {{ sign }}
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script>
-// todo 3 Этап. Сохранение весов обученной сети для игры с человеком.
+// todo 3 Этап. Поле для игры с человеком. Обучение во время игры не останавливается.
 
 import * as tf from '@tensorflow/tfjs';
 import { victoryCheckGroups as hasVictory } from './utils';
@@ -96,6 +117,23 @@ export default {
         ],
       },
       duelGames: 1,
+
+      timerStart: 0,
+      timer: 0,
+
+      AIvsHuman: {
+        step: 1,
+        rewards: [
+          0.1, 0.1, 0.1,
+          0.1, 0.1, 0.1,
+          0.1, 0.1, 0.1,
+        ],
+        field: [
+          '', '', '',
+          '', '', '',
+          '', '', '',
+        ],
+      },
     };
   },
 
@@ -107,8 +145,11 @@ export default {
     this.agentsSetting({ sign: 'O' });
 
     if (isAutomatic) {
-      await this.gameLoop();
+      this.gameLoop();
     }
+
+    this.timerStart = performance.now();
+    this.setTimer();
   },
 
   methods: {
@@ -120,10 +161,10 @@ export default {
         units: 32,
       }));
 
-      // model.add(tf.layers.dense({
-      //   activation: 'sigmoid',
-      //   units: 24,
-      // }));
+      model.add(tf.layers.dense({
+        activation: 'sigmoid',
+        units: 24,
+      }));
 
       model.add(tf.layers.dense({
         activation: 'sigmoid',
@@ -171,11 +212,10 @@ export default {
         await new Promise((resolve) => setTimeout(resolve, 100));
       }
 
-      await this.gameLoop();
+      this.gameLoop();
     },
 
     async startDuel() {
-      // todo объединить?
       await new Promise((resolve) => {
         const agents = this.agents.X.filter(({ isAlive }) => isAlive);
         let count = agents.length;
@@ -272,9 +312,7 @@ export default {
         field.splice(cellIndex, 1, sign);
         agent.rewards = agent.rewards.map((weight) => weight + 0.1);
 
-        const isWinner = hasVictory.horizontalGroup({ field, sign })
-          || hasVictory.verticalGroup({ field, sign, start: 0, step: 2 })
-          || hasVictory.obliquelyGroup({ field, sign });
+        const isWinner = this.determineWinner({ field, sign });
 
         if (isWinner) {
           agent.isAlive = false;
@@ -310,6 +348,12 @@ export default {
           sign,
         });
       }
+    },
+
+    determineWinner({ field, sign }) {
+      return hasVictory.horizontalGroup({ field, sign })
+        || hasVictory.verticalGroup({ field, sign, start: 0, step: 2 })
+        || hasVictory.obliquelyGroup({ field, sign });
     },
 
     saveTraining({ input, label, sign }) {
@@ -357,6 +401,51 @@ export default {
         console.log('isWinner', isWinner);
       }
     },
+
+    setTimer() {
+      setTimeout(this.setTimer, 1000);
+      this.timer = Math.round((performance.now() - this.timerStart) / 1000);
+    },
+
+    // todo сброс накопленных данных: fields step rewards
+    // todo количество ничьих.
+    async setHumanSign(humanCellIndex) {
+      const { field, step } = this.AIvsHuman;
+
+      if (field[humanCellIndex].length === 0) {
+        field.splice(humanCellIndex, 1, 'X');
+        this.AIvsHuman.rewards = this.AIvsHuman.rewards.map((weight) => weight + 0.1);
+
+        const isHumanWinner = this.determineWinner({ field, sign: 'X' });
+        // todo если выиграл - остановка и сброс игры. счёткичи
+        console.log('isHumanWinner', isHumanWinner);
+
+        this.AIvsHuman.step += 1;
+      } else {
+        // todo конец игры. игрок проиграл
+      }
+
+      let stepInput;
+
+      if (step <= 3) {
+        stepInput = step / 3;
+      } else {
+        stepInput = 1 - (step / this.fieldSize);
+      }
+
+      const predictions = await this.modelO.predict(tf.tensor2d([this.AIvsHuman.rewards.concat([stepInput])])).data();
+      const AICellIndex = predictions.indexOf(Math.max(...predictions));
+
+      if (field[AICellIndex].length === 0) {
+        field.splice(AICellIndex, 1, 'O');
+        this.AIvsHuman.rewards = this.AIvsHuman.rewards.map((weight) => weight + 0.1);
+
+        const isAIWinner = this.determineWinner({ field, sign: 'O' });
+        console.log('isAIWinner', isAIWinner);
+      } else {
+        // todo конец игры. ai проиграл
+      }
+    },
   },
 };
 </script>
@@ -368,7 +457,7 @@ export default {
   --square-size: 64px;
 
   position: relative;
-  margin-top: 200px;
+  margin-top: 150px;
   display: flex;
   justify-content: center;
   width: 100%;
@@ -378,7 +467,7 @@ export default {
 .stat {
   position: absolute;
   top: 0;
-  margin-top: -50px;
+  margin-top: -80px;
   width: 100%;
   text-align: center;
   color: white;
@@ -386,11 +475,20 @@ export default {
 
 .stat .title {
   font-size: 16px;
-  color: gray;
+  color: darkgray;
+}
+
+.stat .title span {
+  font-weight: bold;
 }
 
 .stat .description {
   font-size: 14px;
+  color: gray;
+}
+
+.stat .timer {
+  font-size: 12px;
   color: dimgray;
 }
 
@@ -414,18 +512,6 @@ export default {
   font-size: 30px;
   color: #999;
   background-color: #444;
-}
-
-.field .cell.alive {
-}
-
-.field:first-child .cell {
-  /*background-color: black;*/
-}
-
-.field:last-child .cell {
-  /*color: black;*/
-  /*background-color: white;*/
 }
 
 .field .cell.victory {
@@ -455,8 +541,17 @@ export default {
   justify-content: center;
   align-items: center;
   font-size: 30px;
+  font-weight: bold;
   color: white;
   background-color: #222;
+}
+
+.duel-field .cell.X {
+  color: #c94c4c;
+}
+
+.duel-field .cell.O {
+  color: #034f84;
 }
 
 .duel-field .cell.victory {
@@ -474,9 +569,38 @@ export default {
 
 .fields-description {
   position: absolute;
-  bottom: -80px;
+  bottom: -90px;
   width: 100%;
   text-align: center;
+  font-size: 14px;
+  color: dimgray;
+}
+
+.ai-vs-human-container {
+  position: absolute;
+  top: 380px;
+}
+
+.ai-vs-human-container .caption {
+  text-align: center;
+  font-weight: bold;
   color: gray;
+}
+
+.ai-vs-human-container .field {
+  margin-top: 10px;
+  display: grid;
+  grid-template-rows: repeat(var(--quantity-rows), var(--square-size));
+  grid-template-columns: repeat(var(--quantity-columns), var(--square-size));
+  grid-gap: 1px;
+}
+
+.ai-vs-human-container .field .cell {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 30px;
+  color: white;
+  background-color: #222;
 }
 </style>
