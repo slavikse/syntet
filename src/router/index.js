@@ -2,6 +2,9 @@ import Vue from 'vue';
 import VueRouter from 'vue-router';
 
 import App from '@/App.vue';
+import TicTacToe from '@/TicTacToe.vue';
+import Square from '@/Square.vue';
+import Bird from '@/Bird.vue';
 
 Vue.use(VueRouter);
 
@@ -17,19 +20,19 @@ const routes = [
     path: '/TicTacToe',
     name: 'TicTacToe',
     meta: { isReload: true },
-    component: () => import('@/TicTacToe.vue'),
+    component: TicTacToe,
   },
   {
     path: '/Square',
     name: 'Square',
     meta: { isReload: true },
-    component: () => import('@/Square.vue'),
+    component: Square,
   },
   {
     path: '/Bird',
     name: 'Bird',
     meta: { isReload: true },
-    component: () => import('@/Bird.vue'),
+    component: Bird,
   },
 ];
 
