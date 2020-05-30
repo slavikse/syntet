@@ -10,21 +10,21 @@
           :to="{ name: 'TicTacToe' }"
           class="route"
         >
-          TicTacToe <span>(В процессе)</span>
+          Крестики нолики <span>(В разработке)</span>
         </router-link>
 
         <router-link
           :to="{ name: 'Square' }"
           class="route"
         >
-          Square <span>(Завершён)</span>
+          Квадрат в лабиринте <span>(Завершён)</span>
         </router-link>
 
         <router-link
           :to="{ name: 'Bird' }"
           class="route"
         >
-          Bird <span>(Заморожен)</span>
+          Плоская птица <span>(Приостановлен)</span>
         </router-link>
       </div>
     </div>

@@ -1,6 +1,6 @@
 {
   "name": "syntet",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "scripts": {
     "serve": "vue-cli-service serve",
     "build": "vue-cli-service build",
@@ -10,7 +10,7 @@
     "@tensorflow/tfjs": "^2.0.0",
     "@tweenjs/tween.js": "^18.5.0",
     "vue": "^2.6.11",
-    "vue-router": "^3.3.1"
+    "vue-router": "^3.3.2"
   },
   "devDependencies": {
     "@vue/cli-plugin-babel": "^4.4.1",
@@ -21,6 +21,8 @@
     "babel-eslint": "^10.1.0",
     "eslint": "^7.1.0",
     "eslint-plugin-vue": "^6.2.2",
+    "node-sass": "^4.14.1",
+    "sass-loader": "^8.0.2",
     "vue-template-compiler": "^2.6.11"
   }
 }

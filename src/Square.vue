@@ -441,6 +441,7 @@ export default {
       let secondIndex = -1;
       let firstIndex = -1;
 
+      /* eslint-disable vue/script-indent */
       inputs.forEach(([, , cellValue], index) => {
         switch (true) {
           case cellValue > firstCellValue:

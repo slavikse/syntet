@@ -49,7 +49,6 @@ module.exports = {
     'vue/script-indent': 'warn',
     'vue/space-infix-ops': 'warn',
     'vue/space-unary-ops': 'warn',
-    'vue/static-class-names-order': 'warn',
     'vue/v-on-function-call': 'warn',
     'vue/v-slot-style': 'warn',
     'vue/valid-v-bind-sync': 'warn',
