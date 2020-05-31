@@ -692,8 +692,8 @@ export default {
     },
 
     async restoreModelsFromGitHub() {
-      const uriModelX = './syntet_TicTacToe_model_X.json';
-      const uriModelO = './syntet_TicTacToe_model_O.json';
+      const uriModelX = './models/syntet_TicTacToe_model_X.json';
+      const uriModelO = './models/syntet_TicTacToe_model_O.json';
 
       const [modelX, modelO] = await Promise.all([
         tf.loadLayersModel(uriModelX),
