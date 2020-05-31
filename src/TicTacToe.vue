@@ -30,42 +30,44 @@
       </div>
     </div>
 
-    <div class="fields">
-      <div
-        v-for="(agent, agentIndex) in agents.X.concat(agents.O)"
-        :key="agentIndex"
-        class="field"
-      >
+    <div class="fields-container">
+      <div class="fields">
         <div
-          v-for="(sign, cellIndex) in agent.field"
-          :key="`${agentIndex}:${cellIndex}`"
-          :class="['cell', {
-            sign,
-            alive: agent.isAlive,
-            victory: agent.isVictory,
-          }]"
+          v-for="(agent, agentIndex) in agents.X.concat(agents.O)"
+          :key="agentIndex"
+          class="field"
+        >
+          <div
+            v-for="(sign, cellIndex) in agent.field"
+            :key="`${agentIndex}:${cellIndex}`"
+            :class="['cell', {
+              sign,
+              alive: agent.isAlive,
+              victory: agent.isVictory,
+            }]"
+          >
+            {{ sign }}
+            <!--{{ agent.rewards[cellIndex].toFixed(1) }}-->
+          </div>
+
+          <div class="caption">
+            Поле игрока: {{ agent.sign }}
+          </div>
+        </div>
+      </div>
+
+      <div class="duel-field">
+        <div
+          v-for="(sign, cellIndex) in duel.field"
+          :key="cellIndex"
+          :class="['cell', sign, { victory: victoriesStatus[sign] }]"
         >
           {{ sign }}
-          <!--{{ agent.rewards[cellIndex].toFixed(1) }}-->
         </div>
 
         <div class="caption">
-          Поле игрока: {{ agent.sign }}
+          Поле для состязаний
         </div>
-      </div>
-    </div>
-
-    <div class="duel-field">
-      <div
-        v-for="(sign, cellIndex) in duel.field"
-        :key="cellIndex"
-        :class="['cell', sign, { victory: victoriesStatus[sign] }]"
-      >
-        {{ sign }}
-      </div>
-
-      <div class="caption">
-        Поле для состязаний
       </div>
     </div>
 
@@ -109,19 +111,46 @@
       </div>
 
       <button
-        :class="['resume', { 'is-duel': AIvsHuman.isDuel }]"
+        :class="['resume', 'button', { 'is-duel': AIvsHuman.isDuel }]"
         @click="AIvsHumanReset"
       >
         Продолжить обучение
       </button>
+
+      <div class="models-controller">
+        <div class="button-container">
+          <button
+            class="button"
+            @click="saveModelsOnPC"
+          >
+            Сохранить модели на компьютер
+          </button>
+        </div>
+
+        <div class="button-container">
+          <button
+            class="button"
+            @click="localStorageClear"
+          >
+            Очистить локальное хранилище
+          </button>
+        </div>
+
+        <div class="button-container">
+          <button
+            class="button"
+            @click="restoreModelsFromGitHub"
+          >
+            Восстановить модели из GitHub
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script>
 // todo 4 Этап. Игра с человеком.
-// https://www.tensorflow.org/js/guide/save_load
-// todo сохранение (localStorage) и загрузка (GitHub?) весов.
 // todo интернациализация к релизу + статья. запись обучения с англ описанием
 
 import * as tf from '@tensorflow/tfjs';
@@ -132,7 +161,7 @@ const isDuel = true;
 const isDelay = false;
 
 // Занижение награды для X, чтобы O получил преимущество, из за того, что X ходит первым.
-const lowRewardEnemyAdvantage = 0.94;
+const lowRewardEnemyAdvantage = 0.92;
 
 export default {
   name: 'TicTacToe',
@@ -154,8 +183,8 @@ export default {
       step: 1,
       trainingGames: 1,
 
-      timerStart: 0,
       timer: 0,
+      timeTraining: 5 * 60,
 
       isDuel: false,
       duel: {
@@ -187,13 +216,39 @@ export default {
   },
 
   async mounted() {
-    this.setupModel({ model: this.modelX });
-    this.setupModel({ model: this.modelO });
+    const timer = JSON.parse(localStorage.getItem('syntet_TicTacToe_timer'));
+
+    if (timer) {
+      this.timer = timer;
+      this.restoreFromLocalStorage();
+
+      const [modelX, modelO] = await Promise.all([
+        tf.loadLayersModel('localstorage://syntet_TicTacToe_model_X'),
+        tf.loadLayersModel('localstorage://syntet_TicTacToe_model_O'),
+      ]);
+
+      localStorage.clear();
+
+      modelX.compile({
+        optimizer: 'adam',
+        loss: 'meanSquaredError',
+      });
+
+      modelO.compile({
+        optimizer: 'adam',
+        loss: 'meanSquaredError',
+      });
+
+      this.modelX = modelX;
+      this.modelO = modelO;
+    } else {
+      this.setupModel({ model: this.modelX });
+      this.setupModel({ model: this.modelO });
+    }
 
     this.agentsSetting({ sign: 'X' });
     this.agentsSetting({ sign: 'O' });
 
-    this.timerStart = performance.now();
     this.setTimer();
 
     if (isAutomatic) {
@@ -202,6 +257,14 @@ export default {
   },
 
   methods: {
+    restoreFromLocalStorage() {
+      this.trainingCount = JSON.parse(localStorage.getItem('syntet_TicTacToe_trainingCount'));
+      this.victories = JSON.parse(localStorage.getItem('syntet_TicTacToe_victories'));
+      this.trainingGames = JSON.parse(localStorage.getItem('syntet_TicTacToe_trainingGames'));
+      this.duelGames = JSON.parse(localStorage.getItem('syntet_TicTacToe_duelGames'));
+      this.AIvsHuman.victories = JSON.parse(localStorage.getItem('syntet_TicTacToe_AIvsHuman_victories'));
+    },
+
     setupModel({ model }) {
       model.add(tf.layers.dense({
         // +1 - Количество ходов.
@@ -212,7 +275,7 @@ export default {
 
       // model.add(tf.layers.dense({
       //   activation: 'sigmoid',
-      //   units: 64,
+      //   units: 16,
       // }));
 
       model.add(tf.layers.dense({
@@ -248,7 +311,7 @@ export default {
 
     setTimer() {
       setTimeout(this.setTimer, 1000);
-      this.timer = Math.round((performance.now() - this.timerStart) / 1000);
+      this.timer += 1;
     },
 
     async gameLoop() {
@@ -275,7 +338,28 @@ export default {
         await new Promise((resolve) => setTimeout(resolve, 300));
       }
 
+      if (this.timer % this.timeTraining === 0) {
+        this.saveInLocalStorage();
+        await this.saveModelsLocal();
+
+        window.location.reload();
+      }
+
       this.gameLoop();
+    },
+
+    saveInLocalStorage() {
+      localStorage.setItem('syntet_TicTacToe_timer', JSON.stringify(this.timer));
+      localStorage.setItem('syntet_TicTacToe_trainingCount', JSON.stringify(this.trainingCount));
+      localStorage.setItem('syntet_TicTacToe_victories', JSON.stringify(this.victories));
+      localStorage.setItem('syntet_TicTacToe_trainingGames', JSON.stringify(this.trainingGames));
+      localStorage.setItem('syntet_TicTacToe_duelGames', JSON.stringify(this.duelGames));
+      localStorage.setItem('syntet_TicTacToe_AIvsHuman_victories', JSON.stringify(this.AIvsHuman.victories));
+    },
+
+    async saveModelsLocal() {
+      await this.modelX.save('localstorage://syntet_TicTacToe_model_X');
+      await this.modelO.save('localstorage://syntet_TicTacToe_model_O');
     },
 
     async startDuel() {
@@ -449,7 +533,7 @@ export default {
         if (sign === cell) {
           reward = sign === 'X' ? lowRewardEnemyAdvantage : 1;
         } else if (cell.length === 0) {
-          reward = 0.2;
+          reward = 0;
         } else {
           reward = -1;
         }
@@ -466,7 +550,7 @@ export default {
         if (sign === cell) {
           reward = -1;
         } else if (cell.length === 0) {
-          reward = 0.2;
+          reward = 0.5;
         } else {
           reward = -1;
         }
@@ -587,6 +671,31 @@ export default {
         ],
       };
     },
+
+    async saveModelsOnPC() {
+      try {
+        await Promise.all([
+          this.modelX.save('downloads://syntet_TicTacToe_model_X'),
+          this.modelO.save('downloads://syntet_TicTacToe_model_O'),
+        ]);
+
+        alert('Не забыть изменить путь в models.json:paths при выгрузке на GitHub');
+      } catch (err) {
+        console.error('saveModels', err);
+      }
+    },
+
+    localStorageClear() {
+      localStorage.clear();
+    },
+
+    async restoreModelsFromGitHub() {
+      const modelX = 'https://github.com/slavikse/syntet/public/models/syntet_TicTacToe_model_X.json';
+      const modelO = 'https://github.com/slavikse/syntet/public/models/syntet_TicTacToe_model_O.json';
+
+      this.modelX = await tf.loadLayersModel(modelX);
+      this.modelX = await tf.loadLayersModel(modelO);
+    },
   },
 };
 </script>
@@ -601,18 +710,11 @@ export default {
   --square-size: 64px;
 
   position: relative;
-  margin-top: 150px;
-  display: flex;
-  justify-content: center;
-  width: 100%;
+  margin-top: 30px;
   user-select: none;
 }
 
 .stat {
-  position: absolute;
-  top: 0;
-  margin-top: -80px;
-  width: 100%;
   text-align: center;
   color: white;
 
@@ -642,6 +744,12 @@ export default {
     font-size: 12px;
     color: dimgray;
   }
+}
+
+.fields-container {
+  margin-top: 20px;
+  display: flex;
+  justify-content: center;
 }
 
 .fields {
@@ -720,17 +828,18 @@ export default {
 }
 
 .fields-description {
-  position: absolute;
-  bottom: -90px;
-  width: 100%;
+  margin-top: 45px;
   text-align: center;
+  line-height: 1;
   font-size: 14px;
   color: dimgray;
 }
 
 .ai-vs-human-container {
-  position: absolute;
-  top: 380px;
+  margin-top: 50px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 
   .result {
     margin-top: 5px;
@@ -794,17 +903,30 @@ export default {
   }
 
   .resume {
-    width: 100%;
-    padding: 4px 6px;
-    border: none;
-    text-align: center;
+    margin-top: 10px;
     color: #333;
-    background-color: #222;
-    outline: none;
 
     &.is-duel {
       color: white;
     }
   }
+
+  .models-controller {
+    margin-top: 10px;
+    text-align: center;
+
+    .button-container {
+      margin-top: 5px;
+    }
+  }
+}
+
+.button {
+  padding: 4px 6px;
+  border: none;
+  text-align: center;
+  color: darkgrey;
+  background-color: #222;
+  outline: none;
 }
 </style>

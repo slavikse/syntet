@@ -18,6 +18,15 @@
           class="route"
         >
           Квадрат в лабиринте <span>(Завершён)</span>
+
+          <a
+            href="https://habr.com/ru/post/452612"
+            target="_blank"
+            class="link"
+            @click.stop
+          >
+            _Статья__
+          </a>
         </router-link>
 
         <router-link
@@ -54,7 +63,10 @@ export default {
 };
 </script>
 
-<style scoped>
+<style
+  lang="scss"
+  scoped
+>
 .App {
 }
 
@@ -68,32 +80,40 @@ export default {
   position: absolute;
   top: 0;
   z-index: 1;
-  padding: 20px;
+  padding: 10px;
   color: gray;
+
+  .route {
+    margin-top: 5px;
+    color: gray;
+    cursor: pointer;
+    text-decoration: none;
+
+    &:visited {
+      color: gray;
+    }
+
+    &.router-link-exact-active {
+      font-weight: bold;
+    }
+
+    .link {
+      color: gold;
+
+      &:visited {
+        color: gold;
+      }
+    }
+  }
+
+  .route span {
+    font-size: 13px;
+    color: dimgray;
+  }
 }
 
 .buttons {
   display: flex;
   flex-direction: column;
-}
-
-.routers .route {
-  margin-top: 5px;
-  color: gray;
-  cursor: pointer;
-  text-decoration: none;
-}
-
-.routers .route.router-link-exact-active {
-  font-weight: bold;
-}
-
-.routers .route:visited {
-  color: gray;
-}
-
-.routers .route span {
-  font-size: 13px;
-  color: dimgray;
 }
 </style>
