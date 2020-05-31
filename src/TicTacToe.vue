@@ -143,7 +143,7 @@
             class="button"
             @click="restoreModelsFromGitHub"
           >
-            Восстановить модели из GitHub
+            Ввести модели из GitHub
           </button>
         </div>
       </div>
@@ -163,7 +163,7 @@ const isDuel = true;
 const isDelay = false;
 
 // Занижение награды для X, чтобы O получил преимущество, из за того, что X ходит первым.
-const lowRewardEnemyAdvantage = 0.94;
+const lowRewardEnemyAdvantage = 0.8;
 
 export default {
   name: 'TicTacToe',
@@ -272,12 +272,17 @@ export default {
         // +1 - Количество ходов.
         inputShape: [this.fieldSize + 1],
         activation: 'sigmoid',
-        units: 32,
+        units: 64,
       }));
 
       // model.add(tf.layers.dense({
       //   activation: 'sigmoid',
-      //   units: 16,
+      //   units: 48,
+      // }));
+      //
+      // model.add(tf.layers.dense({
+      //   activation: 'sigmoid',
+      //   units: 24,
       // }));
 
       model.add(tf.layers.dense({
@@ -340,7 +345,7 @@ export default {
         await new Promise((resolve) => setTimeout(resolve, 300));
       }
 
-      if (this.timer % this.timeTraining === 0) {
+      if (this.timer !== 0 && this.timer % this.timeTraining === 0) {
         this.saveInLocalStorage();
         await this.saveModelsLocal();
 
@@ -481,9 +486,8 @@ export default {
             this.victoriesStatus[sign] = true;
           }
         } else {
-          // todo закоменченные шаги
-          // agent.rewards[cellIndex] = 0.5;
-          // this.saveTraining({ type: 'step', field, agent, stepInput });
+          agent.rewards[cellIndex] += 0.2;
+          this.saveTraining({ type: 'step', field, agent, stepInput });
         }
       } else {
         agent.isAlive = false;
@@ -533,26 +537,25 @@ export default {
       // Если ячейка свободна, то это нормально, но если занято другим знаком - это плохо.
       if (type === 'winner') {
         if (sign === cell) {
-          reward = sign === 'X' ? lowRewardEnemyAdvantage : 1;
+          reward = sign === 'X' ? lowRewardEnemyAdvantage : 5;
         } else if (cell.length === 0) {
-          reward = 0;
+          reward += 0.2;
         } else {
           reward = -1;
         }
       } else if (type === 'step') {
-        // todo не учитываются оценка шагов
-        // if (sign === cell) {
-        //   reward = 0.7;
-        // } else if (cell.length === 0) {
-        //   reward = 0.5;
-        // } else {
-        //   reward = -1;
-        // }
+        if (sign === cell) {
+          reward += 0.7;
+        } else if (cell.length === 0) {
+          reward += 0.3;
+        } else {
+          reward = -1;
+        }
       } else if (type === 'loss') {
         if (sign === cell) {
           reward = -1;
         } else if (cell.length === 0) {
-          reward = 0.5;
+          reward += 0.1;
         } else {
           reward = -1;
         }

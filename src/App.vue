@@ -7,13 +7,6 @@
 
       <div class="buttons">
         <router-link
-          :to="{ name: 'TicTacToe' }"
-          class="route"
-        >
-          Крестики нолики <span>(В разработке)</span>
-        </router-link>
-
-        <router-link
           :to="{ name: 'Square' }"
           class="route"
         >
@@ -27,6 +20,13 @@
           >
             _Статья__
           </a>
+        </router-link>
+
+        <router-link
+          :to="{ name: 'TicTacToe' }"
+          class="route"
+        >
+          Крестики нолики <span>(Приостановлен)</span>
         </router-link>
 
         <router-link
