@@ -76,7 +76,7 @@
   "weightsManifest": [
     {
       "paths": [
-        "https://slavikse.github.io/syntet/models/syntet_TicTacToe_model_X.weights.bin"
+        "./syntet_TicTacToe_model_X.weights.bin"
       ],
       "weights": [
         {
