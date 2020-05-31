@@ -163,7 +163,7 @@ const isDuel = true;
 const isDelay = false;
 
 // Занижение награды для X, чтобы O получил преимущество, из за того, что X ходит первым.
-const lowRewardEnemyAdvantage = 0.935;
+const lowRewardEnemyAdvantage = 0.94;
 
 export default {
   name: 'TicTacToe',
@@ -272,7 +272,7 @@ export default {
         // +1 - Количество ходов.
         inputShape: [this.fieldSize + 1],
         activation: 'sigmoid',
-        units: 128,
+        units: 32,
       }));
 
       // model.add(tf.layers.dense({
@@ -680,8 +680,6 @@ export default {
           this.modelX.save('downloads://syntet_TicTacToe_model_X'),
           this.modelO.save('downloads://syntet_TicTacToe_model_O'),
         ]);
-
-        alert('Не забудь изменить путь в models.json:paths при выгрузке на GitHub');
       } catch (err) {
         console.error('saveModels', err);
       }
