@@ -16,6 +16,7 @@ module.exports = {
     'object-curly-newline': 'off',
     'vue/no-v-html': 'warn',
     'no-plusplus': 'off',
+    'no-alert': 'off',
     'max-len': [
       1,
       120,

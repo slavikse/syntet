@@ -74,6 +74,8 @@
     <div class="fields-description">
       <div>Первая игра - игроки на своих полях, вторая игра - состязание.</div>
       <div>Подсветка золотистым - победа. Цель обучения - сводить игру в ничью.</div>
+      <br>
+      <b>Начать игру с AI можно поставив знак на поле ниже - обучение приостановится.</b>
     </div>
 
     <div class="ai-vs-human-container">
@@ -161,7 +163,7 @@ const isDuel = true;
 const isDelay = false;
 
 // Занижение награды для X, чтобы O получил преимущество, из за того, что X ходит первым.
-const lowRewardEnemyAdvantage = 0.92;
+const lowRewardEnemyAdvantage = 0.935;
 
 export default {
   name: 'TicTacToe',
@@ -679,7 +681,7 @@ export default {
           this.modelO.save('downloads://syntet_TicTacToe_model_O'),
         ]);
 
-        alert('Не забыть изменить путь в models.json:paths при выгрузке на GitHub');
+        alert('Не забудь изменить путь в models.json:paths при выгрузке на GitHub');
       } catch (err) {
         console.error('saveModels', err);
       }
@@ -690,11 +692,26 @@ export default {
     },
 
     async restoreModelsFromGitHub() {
-      const modelX = 'https://github.com/slavikse/syntet/public/models/syntet_TicTacToe_model_X.json';
-      const modelO = 'https://github.com/slavikse/syntet/public/models/syntet_TicTacToe_model_O.json';
+      const uriModelX = 'https://github.com/slavikse/syntet/public/models/syntet_TicTacToe_model_X.json';
+      const uriModelO = 'https://github.com/slavikse/syntet/public/models/syntet_TicTacToe_model_O.json';
 
-      this.modelX = await tf.loadLayersModel(modelX);
-      this.modelX = await tf.loadLayersModel(modelO);
+      const [modelX, modelO] = await Promise.all([
+        tf.loadLayersModel(uriModelX),
+        tf.loadLayersModel(uriModelO),
+      ]);
+
+      modelX.compile({
+        optimizer: 'adam',
+        loss: 'meanSquaredError',
+      });
+
+      modelO.compile({
+        optimizer: 'adam',
+        loss: 'meanSquaredError',
+      });
+
+      this.modelX = modelX;
+      this.modelO = modelO;
     },
   },
 };
@@ -836,7 +853,7 @@ export default {
 }
 
 .ai-vs-human-container {
-  margin-top: 50px;
+  margin-top: 40px;
   display: flex;
   flex-direction: column;
   align-items: center;

@@ -86,7 +86,6 @@ export default {
   .route {
     margin-top: 5px;
     color: gray;
-    cursor: pointer;
     text-decoration: none;
 
     &:visited {
@@ -98,10 +97,10 @@ export default {
     }
 
     .link {
-      color: gold;
+      color: white;
 
       &:visited {
-        color: gold;
+        color: white;
       }
     }
   }

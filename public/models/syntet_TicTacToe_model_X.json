@@ -2,12 +2,12 @@
   "modelTopology": {
     "class_name": "Sequential",
     "config": {
-      "name": "sequential_1",
+      "name": "sequential_5",
       "layers": [
         {
           "class_name": "Dense",
           "config": {
-            "units": 64,
+            "units": 128,
             "activation": "sigmoid",
             "use_bias": true,
             "kernel_initializer": {
@@ -28,7 +28,7 @@
             "activity_regularizer": null,
             "kernel_constraint": null,
             "bias_constraint": null,
-            "name": "dense_Dense1",
+            "name": "dense_Dense9",
             "trainable": true,
             "batch_input_shape": [
               null,
@@ -61,7 +61,7 @@
             "activity_regularizer": null,
             "kernel_constraint": null,
             "bias_constraint": null,
-            "name": "dense_Dense2",
+            "name": "dense_Dense10",
             "trainable": true
           }
         }
@@ -80,30 +80,30 @@
       ],
       "weights": [
         {
-          "name": "dense_Dense1/kernel",
+          "name": "dense_Dense9/kernel",
           "shape": [
             10,
-            64
+            128
           ],
           "dtype": "float32"
         },
         {
-          "name": "dense_Dense1/bias",
+          "name": "dense_Dense9/bias",
           "shape": [
-            64
+            128
           ],
           "dtype": "float32"
         },
         {
-          "name": "dense_Dense2/kernel",
+          "name": "dense_Dense10/kernel",
           "shape": [
-            64,
+            128,
             9
           ],
           "dtype": "float32"
         },
         {
-          "name": "dense_Dense2/bias",
+          "name": "dense_Dense10/bias",
           "shape": [
             9
           ],
