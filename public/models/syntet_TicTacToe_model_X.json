@@ -2,7 +2,7 @@
   "modelTopology": {
     "class_name": "Sequential",
     "config": {
-      "name": "sequential_5",
+      "name": "sequential_1",
       "layers": [
         {
           "class_name": "Dense",
@@ -28,7 +28,7 @@
             "activity_regularizer": null,
             "kernel_constraint": null,
             "bias_constraint": null,
-            "name": "dense_Dense9",
+            "name": "dense_Dense1",
             "trainable": true,
             "batch_input_shape": [
               null,
@@ -61,7 +61,7 @@
             "activity_regularizer": null,
             "kernel_constraint": null,
             "bias_constraint": null,
-            "name": "dense_Dense10",
+            "name": "dense_Dense2",
             "trainable": true
           }
         }
@@ -76,11 +76,11 @@
   "weightsManifest": [
     {
       "paths": [
-        "https://github.com/slavikse/syntet/public/models/syntet_TicTacToe_model_X.weights.bin"
+        "./syntet_TicTacToe_model_X.weights.bin"
       ],
       "weights": [
         {
-          "name": "dense_Dense9/kernel",
+          "name": "dense_Dense1/kernel",
           "shape": [
             10,
             128
@@ -88,14 +88,14 @@
           "dtype": "float32"
         },
         {
-          "name": "dense_Dense9/bias",
+          "name": "dense_Dense1/bias",
           "shape": [
             128
           ],
           "dtype": "float32"
         },
         {
-          "name": "dense_Dense10/kernel",
+          "name": "dense_Dense2/kernel",
           "shape": [
             128,
             9
@@ -103,7 +103,7 @@
           "dtype": "float32"
         },
         {
-          "name": "dense_Dense10/bias",
+          "name": "dense_Dense2/bias",
           "shape": [
             9
           ],
