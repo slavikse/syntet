@@ -152,8 +152,6 @@
 </template>
 
 <script>
-// todo интернациализация к релизу + статья. запись обучения с англ описанием
-
 import * as tf from '@tensorflow/tfjs';
 import { victoryCheckGroups as hasVictory } from './utils';
 
@@ -166,7 +164,7 @@ const worstReward = -1;
 const lossReward = -0.7;
 const basicReward = 0.1;
 const stepReward = 0.3;
-const interestReward = 0.9;
+const interestReward = 0.7;
 const bestReward = 1;
 
 export default {
@@ -282,11 +280,6 @@ export default {
       // model.add(tf.layers.dense({
       //   activation: 'sigmoid',
       //   units: 48,
-      // }));
-
-      // model.add(tf.layers.dense({
-      //   activation: 'sigmoid',
-      //   units: 32,
       // }));
 
       model.add(tf.layers.dense({
