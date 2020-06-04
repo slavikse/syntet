@@ -158,15 +158,14 @@ const isAutomatic = true;
 const isDuel = true;
 const isDelay = false;
 
-// Занижение награды для X, чтобы O получил преимущество, из за того, что X ходит первым.
-const worstReward = -0.4;
-const lossReward = -0.2;
+const worstReward = -0.2;
+const lossReward = -0.1;
 const basicReward = 0.1;
 const stepReward = 0.2;
 const interestReward = 0.5;
-const bestReward = 2.0;
+const bestReward = 1.0;
 
-const mountedIndex = 7;
+const mountedIndex = 9;
 
 export default {
   name: 'TicTacToe',
@@ -277,13 +276,13 @@ export default {
         // +1 - Количество ходов.
         inputShape: [this.fieldSize + 1],
         activation: 'sigmoid',
-        units: 48,
+        units: 128,
       }));
 
-      model.add(tf.layers.dense({
-        activation: 'sigmoid',
-        units: 32,
-      }));
+      // model.add(tf.layers.dense({
+      //   activation: 'sigmoid',
+      //   units: 32,
+      // }));
 
       model.add(tf.layers.dense({
         activation: 'sigmoid',
@@ -506,6 +505,17 @@ export default {
       const signNextTurn = agent.sign === 'X' ? 'O' : 'X';
 
       for (let i = 0; i < field.length; i += 1) {
+        if (field[i].length === 0) {
+          field.splice(i, 1, agent.sign);
+          const isWinner = this.determineWinner({ field, sign: agent.sign });
+          field.splice(i, 1, '');
+
+          if (isWinner) {
+            agent.rewards[i] = bestReward;
+            break;
+          }
+        }
+
         if (field[i].length === 0) {
           field.splice(i, 1, signNextTurn);
           const isWinner = this.determineWinner({ field, sign: signNextTurn });
