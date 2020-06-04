@@ -163,10 +163,10 @@ const worstReward = -0.3;
 const lossReward = -0.1;
 const basicReward = 0.1;
 const stepReward = 0.2;
-const interestReward = 0.6;
-const bestReward = 1;
+const interestReward = 0.5;
+const bestReward = 2.0;
 
-const mountedIndex = 5;
+const mountedIndex = 6;
 
 export default {
   name: 'TicTacToe',
