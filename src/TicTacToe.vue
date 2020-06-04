@@ -2,7 +2,7 @@
   <div class="TicTacToe">
     <div class="stat">
       <div class="title">
-        <span>Победы в состязаниях:</span>
+        <span>Победы в соревнованиях:</span>
 
         <span class="X">
           X
@@ -22,7 +22,7 @@
       </div>
 
       <div class="description">
-        Количество тренировок и состязаний: {{ trainingGames + duelGames }}
+        Количество тренировок и соревнований: {{ trainingGames + duelGames }}
       </div>
 
       <div class="timer">
@@ -66,13 +66,13 @@
         </div>
 
         <div class="caption">
-          Поле для состязаний
+          Поле для соревнований
         </div>
       </div>
     </div>
 
     <div class="fields-description">
-      <div>Первая игра - игроки на своих полях, вторая игра - состязание.</div>
+      <div>Первая игра - игроки на своих полях, вторая игра - соревнование.</div>
       <div>Подсветка золотистым - победа. Цель обучения - сводить игру в ничью.</div>
       <br>
       <b>Начать игру с AI можно поставив знак на поле ниже - обучение приостановится.</b>
