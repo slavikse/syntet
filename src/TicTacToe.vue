@@ -163,7 +163,7 @@ const worstReward = -1;
 const lossReward = -0.6;
 const basicReward = 0.1;
 const stepReward = 0.2;
-const interestReward = 0.6;
+const interestReward = 0.5;
 const bestReward = 1;
 
 export default {
@@ -187,7 +187,7 @@ export default {
       trainingGames: 1,
 
       timer: 0,
-      timeTraining: 10 * 60,
+      timeTraining: 5 * 60,
 
       isDuel: false,
       duel: {
@@ -273,7 +273,7 @@ export default {
         // +1 - Количество ходов.
         inputShape: [this.fieldSize + 1],
         activation: 'sigmoid',
-        units: 256,
+        units: 128,
       }));
 
       // model.add(tf.layers.dense({
