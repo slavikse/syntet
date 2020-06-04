@@ -159,14 +159,14 @@ const isDuel = true;
 const isDelay = false;
 
 // Занижение награды для X, чтобы O получил преимущество, из за того, что X ходит первым.
-const worstReward = -0.7;
-const lossReward = -0.4;
+const worstReward = -0.3;
+const lossReward = -0.1;
 const basicReward = 0.1;
 const stepReward = 0.2;
-const interestReward = 0.7;
-const bestReward = 2;
+const interestReward = 0.6;
+const bestReward = 1;
 
-const mountedIndex = 4;
+const mountedIndex = 5;
 
 export default {
   name: 'TicTacToe',
