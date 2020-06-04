@@ -158,8 +158,8 @@ const isAutomatic = true;
 const isDuel = true;
 const isDelay = false;
 
-const worstReward = -0.2;
-const lossReward = -0.1;
+const worstReward = -1.0;
+const lossReward = -0.4;
 const basicReward = 0.1;
 const stepReward = 0.2;
 const interestReward = 0.5;
@@ -514,14 +514,14 @@ export default {
             agent.rewards[i] = bestReward;
             break;
           }
-        }
 
-        if (field[i].length === 0) {
+          // ---
+
           field.splice(i, 1, signNextTurn);
-          const isWinner = this.determineWinner({ field, sign: signNextTurn });
+          const isOtherWinner = this.determineWinner({ field, sign: signNextTurn });
           field.splice(i, 1, '');
 
-          if (isWinner) {
+          if (isOtherWinner) {
             agent.rewards[i] = interestReward;
             break;
           }
