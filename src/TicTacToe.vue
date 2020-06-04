@@ -159,14 +159,14 @@ const isDuel = true;
 const isDelay = false;
 
 // Занижение награды для X, чтобы O получил преимущество, из за того, что X ходит первым.
-const worstReward = -0.7;
-const lossReward = -0.4;
+const worstReward = -0.4;
+const lossReward = -0.2;
 const basicReward = 0.1;
 const stepReward = 0.2;
 const interestReward = 0.5;
 const bestReward = 1;
 
-const mountedIndex = 1;
+const mountedIndex = 3;
 
 export default {
   name: 'TicTacToe',
@@ -277,13 +277,13 @@ export default {
         // +1 - Количество ходов.
         inputShape: [this.fieldSize + 1],
         activation: 'sigmoid',
-        units: 128,
+        units: 64,
       }));
 
-      // model.add(tf.layers.dense({
-      //   activation: 'sigmoid',
-      //   units: 48,
-      // }));
+      model.add(tf.layers.dense({
+        activation: 'sigmoid',
+        units: 48,
+      }));
 
       model.add(tf.layers.dense({
         activation: 'sigmoid',
