@@ -7,6 +7,13 @@
 
       <div class="buttons">
         <router-link
+          :to="{ name: 'TicTacToe' }"
+          class="route"
+        >
+          Крестики нолики <span>(Завершён)</span>
+        </router-link>
+
+        <router-link
           :to="{ name: 'Square' }"
           class="route"
         >
@@ -23,13 +30,6 @@
         </router-link>
 
         <router-link
-          :to="{ name: 'TicTacToe' }"
-          class="route"
-        >
-          Крестики нолики <span>(Завершён)</span>
-        </router-link>
-
-        <router-link
           :to="{ name: 'Snake' }"
           class="route"
         >
@@ -40,7 +40,7 @@
           :to="{ name: 'Bird' }"
           class="route"
         >
-          Плоская птица <span>(Приостановлен)</span>
+          Птица <span>(Приостановлен)</span>
         </router-link>
       </div>
     </div>
