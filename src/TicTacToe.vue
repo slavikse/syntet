@@ -159,12 +159,14 @@ const isDuel = true;
 const isDelay = false;
 
 // Занижение награды для X, чтобы O получил преимущество, из за того, что X ходит первым.
-const worstReward = -1;
-const lossReward = -0.6;
+const worstReward = -0.7;
+const lossReward = -0.4;
 const basicReward = 0.1;
 const stepReward = 0.2;
 const interestReward = 0.5;
 const bestReward = 1;
+
+const mountedIndex = 1;
 
 export default {
   name: 'TicTacToe',
@@ -219,6 +221,8 @@ export default {
   },
 
   async mounted() {
+    console.log(mountedIndex);
+
     const timer = JSON.parse(localStorage.getItem('syntet_TicTacToe_timer'));
 
     if (timer) {
