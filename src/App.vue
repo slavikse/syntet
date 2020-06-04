@@ -26,7 +26,14 @@
           :to="{ name: 'TicTacToe' }"
           class="route"
         >
-          Крестики нолики <span>(Приостановлен)</span>
+          Крестики нолики <span>(Завершён)</span>
+        </router-link>
+
+        <router-link
+          :to="{ name: 'Snake' }"
+          class="route"
+        >
+          Змейка <span>(В разработке)</span>
         </router-link>
 
         <router-link

@@ -17,7 +17,7 @@
         <div
           v-for="(cellValue, index) in field"
           :key="index"
-          :class="['cell', { 'available': cellValue !== 0 }]"
+          :class="['cell', { available: cellValue !== 0 }]"
         >
           <div
             v-if="cellValue === 1"

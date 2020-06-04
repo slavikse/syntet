@@ -5,6 +5,7 @@ import App from '@/App.vue';
 import TicTacToe from '@/TicTacToe.vue';
 import Square from '@/Square.vue';
 import Bird from '@/Bird.vue';
+import Snake from '@/Snake.vue';
 
 Vue.use(VueRouter);
 
@@ -34,11 +35,12 @@ const routes = [
     meta: { isReload: true },
     component: Bird,
   },
+  {
+    path: '/Snake',
+    name: 'Snake',
+    meta: { isReload: true },
+    component: Snake,
+  },
 ];
 
-const router = new VueRouter({
-  // mode: 'history',
-  routes,
-});
-
-export default router;
+export default new VueRouter({ routes });

@@ -2,7 +2,7 @@
   <div class="TicTacToe">
     <div class="stat">
       <div class="title">
-        Победы в состязаниях:
+        <span>Победы в состязаниях:</span>
 
         <span class="X">
           X
@@ -98,7 +98,7 @@
       </div>
 
       <div class="caption">
-        Человек против AI <span>(beta)</span>
+        Человек против AI
       </div>
 
       <div class="field">
@@ -152,7 +152,6 @@
 </template>
 
 <script>
-// todo 4 Этап. Игра с человеком.
 // todo интернациализация к релизу + статья. запись обучения с англ описанием
 
 import * as tf from '@tensorflow/tfjs';
@@ -163,7 +162,12 @@ const isDuel = true;
 const isDelay = false;
 
 // Занижение награды для X, чтобы O получил преимущество, из за того, что X ходит первым.
-const lowRewardEnemyAdvantage = 0.8;
+const worstReward = -1;
+const lossReward = -0.7;
+const basicReward = 0.1;
+const stepReward = 0.3;
+const interestReward = 0.9;
+const bestReward = 1;
 
 export default {
   name: 'TicTacToe',
@@ -272,17 +276,17 @@ export default {
         // +1 - Количество ходов.
         inputShape: [this.fieldSize + 1],
         activation: 'sigmoid',
-        units: 64,
+        units: 128,
       }));
 
       // model.add(tf.layers.dense({
       //   activation: 'sigmoid',
       //   units: 48,
       // }));
-      //
+
       // model.add(tf.layers.dense({
       //   activation: 'sigmoid',
-      //   units: 24,
+      //   units: 32,
       // }));
 
       model.add(tf.layers.dense({
@@ -349,6 +353,7 @@ export default {
         this.saveInLocalStorage();
         await this.saveModelsLocal();
 
+        // Высвобождение ресурсов, чтобы не зависала вкладка.
         window.location.reload();
       }
 
@@ -435,6 +440,7 @@ export default {
       }
     },
 
+    // Знаки обучаются ходить.
     async startTraining() {
       const tasks = this.agents.X.filter(({ isAlive }) => isAlive)
         .map((agent) => this.modelPredict({ model: this.modelX, agent }))
@@ -463,6 +469,8 @@ export default {
       const step = this.isDuel ? this.duel.step : this.step;
       const field = this.isDuel ? this.duel.field : agent.field;
 
+      this.increasingInterest({ field, agent });
+
       const stepInput = this.getStepInput(step);
       const predictions = await model.predict(tf.tensor2d([agent.rewards.concat([stepInput])])).data();
       const cellIndex = predictions.indexOf(Math.max(...predictions));
@@ -477,7 +485,7 @@ export default {
         if (isWinner) {
           agent.isAlive = false;
           agent.isVictory = true;
-          agent.rewards[cellIndex] = sign === 'X' ? lowRewardEnemyAdvantage : 1;
+          agent.rewards[cellIndex] = bestReward;
 
           this.saveTraining({ type: 'winner', field, agent, stepInput });
 
@@ -486,7 +494,7 @@ export default {
             this.victoriesStatus[sign] = true;
           }
         } else {
-          agent.rewards[cellIndex] += 0.2;
+          agent.rewards[cellIndex] = basicReward;
           this.saveTraining({ type: 'step', field, agent, stepInput });
         }
       } else {
@@ -497,22 +505,40 @@ export default {
       }
     },
 
-    recalculateRewards({ rewards, field }) {
-      return rewards.map((reward, index) => {
-        let rewardResult = reward;
+    // Повышение интереса для хода к потенциально выигрышной ячейки противника.
+    increasingInterest({ field, agent }) {
+      const signNextTurn = agent.sign === 'X' ? 'O' : 'X';
 
-        if (field[index].length === 0) {
-          rewardResult += 0.1;
-        } else {
-          rewardResult = -1;
+      for (let i = 0; i < field.length; i += 1) {
+        if (field[i].length === 0) {
+          field.splice(i, 1, signNextTurn);
+          const isWinner = this.determineWinner({ field, sign: signNextTurn });
+          field.splice(i, 1, '');
+
+          if (isWinner) {
+            agent.rewards[i] = interestReward;
+            break;
+          }
         }
-
-        return rewardResult;
-      });
+      }
     },
 
     getStepInput(step) {
       return 1 - (step / this.fieldSize);
+    },
+
+    recalculateRewards({ rewards, field }) {
+      return rewards.map((_, index) => {
+        let reward;
+
+        if (field[index].length === 0) {
+          reward = basicReward;
+        } else {
+          reward = worstReward;
+        }
+
+        return reward;
+      });
     },
 
     determineWinner({ field, sign }) {
@@ -532,32 +558,32 @@ export default {
     },
 
     trafficLights({ type, sign, cell }) {
-      let reward = 0.1;
+      let reward = basicReward;
 
       // Если ячейка свободна, то это нормально, но если занято другим знаком - это плохо.
       if (type === 'winner') {
         if (sign === cell) {
-          reward = sign === 'X' ? lowRewardEnemyAdvantage : 5;
+          reward = bestReward;
         } else if (cell.length === 0) {
-          reward += 0.2;
+          reward = basicReward;
         } else {
-          reward = -1;
+          reward = worstReward;
         }
       } else if (type === 'step') {
         if (sign === cell) {
-          reward += 0.7;
+          reward = stepReward;
         } else if (cell.length === 0) {
-          reward += 0.3;
+          reward = basicReward;
         } else {
-          reward = -1;
+          reward = worstReward;
         }
       } else if (type === 'loss') {
         if (sign === cell) {
-          reward = -1;
+          reward = lossReward;
         } else if (cell.length === 0) {
-          reward += 0.1;
+          reward = basicReward;
         } else {
-          reward = -1;
+          reward = worstReward;
         }
       }
 
@@ -566,7 +592,7 @@ export default {
 
     async modelFit({ model, sign }) {
       if (this.trainingCount[sign] > 0) {
-        // todo где то данные не кладутся, но счётчик увеличивается.
+        // Где то данные не кладутся, но счётчик увеличивается.
         if (this.training[sign].inputs.length === 0 || this.training[sign].labels.length === 0) {
           return;
         }
@@ -607,14 +633,20 @@ export default {
     },
 
     async humanSignXO({ sign, cIndex }) {
-      const { field } = this.AIvsHuman;
+      if (this.AIvsHuman.step > this.fieldSize) {
+        this.AIvsHumanReset();
+        return { isPass: false };
+      }
 
       this.AIvsHuman.step += 1;
       const stepInput = this.getStepInput(this.AIvsHuman.step);
 
+      const { field } = this.AIvsHuman;
       let cellIndex = cIndex;
 
       if (sign === 'O') {
+        this.increasingInterest({ field, agent: this.AIvsHuman });
+
         const predictions = await this.modelO.predict(tf.tensor2d([this.AIvsHuman.rewards.concat([stepInput])])).data();
         cellIndex = predictions.indexOf(Math.max(...predictions));
       }
@@ -888,10 +920,6 @@ export default {
     font-size: 14px;
     font-weight: bold;
     color: gray;
-
-    span {
-      color: gold;
-    }
   }
 
   .field {
