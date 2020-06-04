@@ -165,7 +165,7 @@ const stepReward = 0.2;
 const interestReward = 0.5;
 const bestReward = 1.0;
 
-const mountedIndex = 9;
+const mountedIndex = 10;
 
 export default {
   name: 'TicTacToe',
