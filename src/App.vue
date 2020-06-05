@@ -11,6 +11,15 @@
           class="route"
         >
           Крестики нолики <span>(Завершён)</span>
+
+          <a
+            href="https://habr.com/ru/post/505574"
+            target="_blank"
+            class="link"
+            @click.stop
+          >
+            _Статья__
+          </a>
         </router-link>
 
         <router-link
