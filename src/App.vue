@@ -45,12 +45,35 @@
           Змейка <span>(В разработке)</span>
         </router-link>
 
+        <!--
+        <router-link
+          :to="{ name: 'Puppet' }"
+          class="route"
+        >
+          Марионетка <span>(В разработке)</span>
+        </router-link>
+
+        <router-link
+          :to="{ name: 'CartPole' }"
+          class="route"
+        >
+          Тележка <span>(В разработке)</span>
+        </router-link>
+
         <router-link
           :to="{ name: 'Bird' }"
           class="route"
         >
           Птица <span>(Приостановлен)</span>
         </router-link>
+
+        <router-link
+          :to="{ name: 'Manipulator' }"
+          class="route"
+        >
+          Манипулятор <span>(Приостановлен)</span>
+        </router-link>
+        -->
       </div>
     </div>
 
@@ -64,14 +87,14 @@ export default {
 
   data() {
     return {
-      prevRouteName: localStorage.getItem('prevRouteName'),
+      previousRouteName: localStorage.getItem('previousRouteName'),
     };
   },
 
   watch: {
     $route(to) {
-      if (to.meta.isReload && to.name !== this.prevRouteName) {
-        localStorage.setItem('prevRouteName', to.name);
+      if (to.meta.isReload && to.name !== this.previousRouteName) {
+        localStorage.setItem('previousRouteName', to.name);
         window.location.reload();
       }
     },

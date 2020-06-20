@@ -4,8 +4,11 @@ import VueRouter from 'vue-router';
 import App from '@/App.vue';
 import TicTacToe from '@/TicTacToe.vue';
 import Square from '@/Square.vue';
-import Bird from '@/Bird.vue';
+
 import Snake from '@/Snake.vue';
+// import Puppet from '@/Puppet.vue';
+// import Cart from '@/Cart.vue';
+// import Bird from '@/Bird.vue';
 
 Vue.use(VueRouter);
 
@@ -30,17 +33,29 @@ const routes = [
     component: Square,
   },
   {
-    path: '/Bird',
-    name: 'Bird',
-    meta: { isReload: true },
-    component: Bird,
-  },
-  {
     path: '/Snake',
     name: 'Snake',
     meta: { isReload: true },
     component: Snake,
   },
+  // {
+  //   path: '/Puppet',
+  //   name: 'Puppet',
+  //   meta: { isReload: true },
+  //   component: Puppet,
+  // },
+  // {
+  //   path: '/Cart',
+  //   name: 'Cart',
+  //   meta: { isReload: true },
+  //   component: Cart,
+  // },
+  // {
+  //   path: '/Bird',
+  //   name: 'Bird',
+  //   meta: { isReload: true },
+  //   component: Bird,
+  // },
 ];
 
 export default new VueRouter({ routes });
