@@ -152,7 +152,7 @@
 
 <script>
 import * as tf from '@tensorflow/tfjs';
-import { victoryCheckGroups as hasVictory } from './utils';
+import * as hasVictory from './victoryCheckGroups';
 
 const isAutomatic = true;
 const isDuel = true;

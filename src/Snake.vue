@@ -4,41 +4,22 @@
     tabindex="-1"
     class="Snake"
 
-    @keyup.w="handleKeys({ name: 'one', side: 'stepTop' })"
-    @keyup.d="handleKeys({ name: 'one', side: 'stepRight' })"
-    @keyup.s="handleKeys({ name: 'one', side: 'stepBottom' })"
-    @keyup.a="handleKeys({ name: 'one', side: 'stepLeft' })"
-
-    @keyup.up="handleKeys({ name: 'two', side: 'stepTop' })"
-    @keyup.right="handleKeys({ name: 'two', side: 'stepRight' })"
-    @keyup.down="handleKeys({ name: 'two', side: 'stepBottom' })"
-    @keyup.left="handleKeys({ name: 'two', side: 'stepLeft' })"
+    @keyup.w="handleKeys({ name: 'human', side: 'stepTop' })"
+    @keyup.d="handleKeys({ name: 'human', side: 'stepRight' })"
+    @keyup.s="handleKeys({ name: 'human', side: 'stepBottom' })"
+    @keyup.a="handleKeys({ name: 'human', side: 'stepLeft' })"
   >
     <div class="field">
       <div
-        v-for="(color, colorIndex) in field"
-        :key="colorIndex"
-        :style="{ backgroundColor: color }"
-        class="cell"
-      >
-        {{ actors.one.rewards[colorIndex] }}
-        {{ actors.two.rewards[colorIndex] }}
-      </div>
-    </div>
-
-    <div class="actors field">
-      <div
-        v-for="actor in Object.values(actors)"
-        :key="actor.id"
+        v-for="(row, rowIndex) in field"
+        :key="rowIndex"
+        class="row"
       >
         <div
-          v-for="cell in actor.cells"
-          :key="cell.id"
-          :style="{
-            gridColumn: cell.position.x,
-            gridRow: cell.position.y,
-            backgroundColor: actor.color,
-          }"
+          v-for="(cell, cellIndex) in row"
+          :key="`${rowIndex}_${cellIndex}`"
+          :style="{ backgroundColor: cell }"
+          class="cell"
         />
       </div>
     </div>
@@ -88,21 +69,18 @@ const sides = {
 
 let nextFrameId = -1;
 
-// todo переключение режимов (mode), чтобы играть против МЛ вручную и потом возобновить обучение.
-
 export default {
   name: 'Snake',
 
   data() {
     return {
-      field: Array(fieldSize ** 2).fill(basicColor),
-      fieldDefault: undefined,
+      field: [[]],
+      fieldDefault: [[]],
       fieldSize,
 
       actors: {
-        one: {
-          id: nanoid(),
-          name: 'one',
+        human: {
+          name: 'human',
           side: 'stepBottom',
           model: tf.sequential(),
           training: { inputs: [], labels: [] },
@@ -115,9 +93,8 @@ export default {
             { id: nanoid(), position: { x: 3, y: 3 } },
           ],
         },
-        two: {
-          id: nanoid(),
-          name: 'two',
+        ai: {
+          name: 'ai',
           side: 'stepTop',
           model: tf.sequential(),
           training: { inputs: [], labels: [] },
@@ -134,51 +111,49 @@ export default {
           ],
         },
       },
-      actorsDefault: undefined,
+      actorsDefault: {},
 
+      // todo переключение режимов (mode), чтобы играть против МЛ вручную и потом возобновить обучение.
       mode: 'gaming', // training | gaming
     };
   },
 
   mounted() {
-    this.setFieldSize();
-
-    this.actorsDefault = cloneDeep(this.actors);
-    Object.values(this.actors).forEach(this.setupModel);
-
     this.initialField();
     this.initialActors();
     this.addApple();
 
-    this.runGame();
+    this.autoStep();
   },
 
   methods: {
     // Игровой алгоритм.
-    setFieldSize() {
+    initialField() {
       this.$refs.snake.style.setProperty('--rows', String(fieldSize));
       this.$refs.snake.style.setProperty('--columns', String(fieldSize));
-    },
 
-    initialField() {
-      for (let x = 0; x < fieldSize; x += 1) {
-        for (let y = 0; y < fieldSize; y += 1) {
-          const isBarrier = x === 0 || x === fieldSize - 1 || y === 0 || y === fieldSize - 1;
-          const color = isBarrier ? barrierColor : basicColor;
-          const cellIndex = y * fieldSize + x;
+      const field = Array(fieldSize);
 
-          this.field[cellIndex] = color;
+      for (let y = 0; y < fieldSize; y += 1) {
+        field[y] = Array(fieldSize);
+
+        for (let x = 0; x < fieldSize; x += 1) {
+          const isBarrier = y === 0 || y === fieldSize - 1 || x === 0 || x === fieldSize - 1;
+          field[y][x] = isBarrier ? barrierColor : basicColor;
         }
       }
 
+      this.field = field;
       this.fieldDefault = cloneDeep(this.field);
     },
 
     initialActors() {
+      Object.values(this.actors).forEach(this.setupModel);
+      this.actorsDefault = cloneDeep(this.actors);
+
       Object.values(this.actors).forEach((actor) => {
-        actor.cells.forEach(({ position: { x, y } }, actorCellIndex) => {
-          const cellIndex = y * fieldSize + x;
-          this.field[cellIndex] = actorCellIndex === 0 ? actor.colorHead : actor.colorTail;
+        actor.cells.forEach(({ position: { x, y } }, cellIndex) => {
+          this.field[y][x] = cellIndex === 0 ? actor.colorHead : actor.colorTail;
         });
 
         actor.rewards = actor.rewards.map(() => basicReward);
@@ -186,20 +161,13 @@ export default {
     },
 
     addApple() {
-      const appleCellIndex = Math.round(Math.random() * (this.field.length - 1));
+      const y = Math.round(Math.random() * (fieldSize - 1));
+      const x = Math.round(Math.random() * (fieldSize - 1));
 
-      if (this.field[appleCellIndex] === basicColor) {
-        this.field[appleCellIndex] = appleColor;
+      if (this.field[y][x] === basicColor) {
+        this.field[y][x] = appleColor;
       } else {
         this.addApple();
-      }
-    },
-
-    runGame() {
-      if (this.mode === 'training') {
-        nextFrameId = requestAnimationFrame(this.autoStep);
-      } else if (this.mode === 'gaming') {
-        nextFrameId = setTimeout(this.autoStep, autoMovementDelay);
       }
     },
 
@@ -211,17 +179,25 @@ export default {
 
     async autoStep() {
       await Promise.all(Object.values(this.actors).map((actor) => (async () => {
-        this.estimationSides(actor);
+        if (this.mode === 'gaming' && actor.name === 'human') {
+          // pass
+        } else {
+          this.estimationSides(actor);
 
-        // 0 - stepTop, 1 - stepRight, 2 - stepBottom, 3 - stepLeft.
-        const sideIndex = await this.modelPredict(actor);
-        actor.side = sides[sideIndex];
+          // 0 - stepTop, 1 - stepRight, 2 - stepBottom, 3 - stepLeft.
+          const sideIndex = await this.modelPredict(actor);
+          actor.side = sides[sideIndex];
+        }
 
         const { name, side } = actor;
         this.step({ name, side });
       })()));
 
-      nextFrameId = setTimeout(this.autoStep, autoMovementDelay);
+      if (this.mode === 'training') {
+        nextFrameId = requestAnimationFrame(this.autoStep);
+      } else if (this.mode === 'gaming') {
+        nextFrameId = setTimeout(this.autoStep, autoMovementDelay);
+      }
     },
 
     step({ name, side }) {
@@ -232,11 +208,9 @@ export default {
       this.stepHead({ actor, side });
     },
 
-    clearTail(actor) {
-      const { position: { x, y } } = actor.cells[actor.cells.length - 1];
-
-      const cellIndex = y * fieldSize + x;
-      this.field[cellIndex] = basicColor;
+    clearTail({ cells }) {
+      const { position: { x, y } } = cells[cells.length - 1];
+      this.field[y][x] = basicColor;
     },
 
     stepTail(actor) {
@@ -245,46 +219,43 @@ export default {
         cell.position = actor.cells[i - 1].position;
 
         const { position: { x, y } } = cell;
-        const cellIndex = y * fieldSize + x;
-
-        this.field[cellIndex] = actor.colorTail;
+        this.field[y][x] = actor.colorTail;
       }
     },
 
     stepHead({ actor, side }) {
-      const [headCell] = actor.cells;
-      const { position: { x: xHead, y: yHead } } = headCell;
+      const [cell] = actor.cells;
+      const { position: { x, y } } = cell;
 
-      this[side]({ headCell, x: xHead, y: yHead });
+      this[side]({ cell, x, y });
 
       this.nextCell(actor);
     },
 
-    stepTop({ headCell, x, y }) {
-      headCell.position = { x, y: y - 1 };
+    stepTop({ cell, x, y }) {
+      cell.position = { x, y: y - 1 };
     },
 
-    stepRight({ headCell, x, y }) {
-      headCell.position = { x: x + 1, y };
+    stepRight({ cell, x, y }) {
+      cell.position = { x: x + 1, y };
     },
 
-    stepBottom({ headCell, x, y }) {
-      headCell.position = { x, y: y + 1 };
+    stepBottom({ cell, x, y }) {
+      cell.position = { x, y: y + 1 };
     },
 
-    stepLeft({ headCell, x, y }) {
-      headCell.position = { x: x - 1, y };
+    stepLeft({ cell, x, y }) {
+      cell.position = { x: x - 1, y };
     },
 
     nextCell(actor) {
       const [{ position: { x, y } }] = actor.cells;
-      const nextCellIndex = y * fieldSize + x;
-      const nextColor = this.field[nextCellIndex];
+      const nextColor = this.field[y][x];
 
       if (colors.includes(nextColor)) {
         this.gameOver(actor);
       } else {
-        this.field[nextCellIndex] = actor.colorHead;
+        this.field[y].splice(x, 1, actor.colorHead);
 
         if (nextColor === appleColor) {
           this.growth({ actor, x, y });
@@ -294,7 +265,10 @@ export default {
     },
 
     growth({ actor, x, y }) {
-      actor.cells.push({ id: nanoid(), position: { x, y } });
+      actor.cells.push({
+        id: nanoid(),
+        position: { x, y },
+      });
     },
 
     // todo остановить игру, пока идёт обучение
@@ -343,6 +317,7 @@ export default {
     // todo врага так же разметить как -1 (стена). отметить всех и себя тоже
     // todo яблоко +1 для стороны
     estimationSides(actor) {
+      console.log(actor);
       // actor.rewards
     },
 
@@ -381,18 +356,18 @@ export default {
 .field {
   display: grid;
   grid-template-rows: repeat(var(--rows), var(--size));
-  grid-template-columns: repeat(var(--columns), var(--size));
 
-  .cell {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-size: 12px;
-    color: #555;
+  .row {
+    display: grid;
+    grid-template-columns: repeat(var(--columns), var(--size));
+
+    .cell {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 12px;
+      color: #555;
+    }
   }
-}
-
-.actors {
-  position: absolute;
 }
 </style>
