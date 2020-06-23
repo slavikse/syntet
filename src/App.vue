@@ -42,7 +42,7 @@
           :to="{ name: 'Snake' }"
           class="route"
         >
-          Змейка <span>(В разработке)</span>
+          Змейка <span>(Приостановлен)</span>
         </router-link>
 
         <!--
