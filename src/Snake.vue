@@ -97,19 +97,17 @@ const sidesIndex = {
 const numberSides = Object.keys(indexSides).length;
 
 const autoMovementDelay = 150;
+const maximumStepsCount = fieldSize * 3;
 const isDevelopment = false;
 
 let nextFrameId = -1;
 
 // --- ML ---
-// todo +1 для расстояния до ближайшего яблока
-// todo сканер для преград. расстояние? или следующая ячейка
-// const inputShape = 4 + 4; // Зрение = 4 стороны нахождения яблока + 4 луча определяющие преграды.
 
 // Награды.
+const barrierReward = -1.0;
 const basicReward = 0.1;
 const freeReward = 0.3;
-const barrierReward = -1.0;
 const appleReward = 1.0;
 
 // todo добавить статичные преграды
@@ -125,7 +123,6 @@ export default {
 
       actors: {
         human: {
-          isActive: true,
           name: 'human',
           side: 'stepBottom',
 
@@ -143,29 +140,29 @@ export default {
           training: { inputs: [], labels: [] },
           rewards: Array(numberSides).fill(basicReward),
         },
-        ai: {
-          isActive: false,
-          name: 'ai',
-          side: 'stepTop',
-
-          colorHead: actorsColors[2],
-          colorTail: actorsColors[3],
-          cells: [
-            { id: nanoid(), position: { y: fieldSize - 9, x: fieldSize - 4 } },
-            { id: nanoid(), position: { y: fieldSize - 8, x: fieldSize - 4 } },
-            { id: nanoid(), position: { y: fieldSize - 7, x: fieldSize - 4 } },
-            { id: nanoid(), position: { y: fieldSize - 6, x: fieldSize - 4 } },
-            { id: nanoid(), position: { y: fieldSize - 5, x: fieldSize - 4 } },
-          ],
-
-          model: tf.sequential(),
-          training: { inputs: [], labels: [] },
-          rewards: Array(numberSides).fill(basicReward),
-        },
+        // ai: {
+        //   name: 'ai',
+        //   side: 'stepTop',
+        //
+        //   colorHead: actorsColors[2],
+        //   colorTail: actorsColors[3],
+        //   cells: [
+        //     { id: nanoid(), position: { y: fieldSize - 9, x: fieldSize - 4 } },
+        //     { id: nanoid(), position: { y: fieldSize - 8, x: fieldSize - 4 } },
+        //     { id: nanoid(), position: { y: fieldSize - 7, x: fieldSize - 4 } },
+        //     { id: nanoid(), position: { y: fieldSize - 6, x: fieldSize - 4 } },
+        //     { id: nanoid(), position: { y: fieldSize - 5, x: fieldSize - 4 } },
+        //   ],
+        //
+        //   model: tf.sequential(),
+        //   training: { inputs: [], labels: [] },
+        //   rewards: Array(numberSides).fill(basicReward),
+        // },
       },
       actorsDefault: {},
 
-      stats: {}, // Инициализируется в initialStats.
+      stats: {}, // Инициализируется в initialStats на основе actors.
+      stepsCount: 0,
 
       // todo для сбора двух и более яблок, нужен алгоритм ближайшего яблока + для обучения
       apples: [
@@ -274,7 +271,7 @@ export default {
 
     async autoStep() {
       if (this.isRunning) {
-        await this.predict();
+        await this.modelsPredicts();
       }
 
       if (this.mode === 'training') {
@@ -284,24 +281,30 @@ export default {
       }
     },
 
-    async predict() {
-      await Promise.all(Object.values(this.actors)
-        .filter((actor) => actor.isActive)
-        .map((actor) => (async () => {
-          if (this.mode === 'gaming' && actor.name === 'human') {
-            // todo
-            // this.estimationSides(actor);
-            // pass
-          } else {
-            this.estimationSides(actor);
+    async modelsPredicts() {
+      await Promise.all(Object.values(this.actors).map((actor) => (async () => {
+        if (this.mode === 'gaming' && actor.name === 'human') {
+          // pass
+          // this.estimationSides(actor);
+        } else {
+          this.estimationSides(actor);
 
-            const sideIndex = await this.modelPredict(actor);
-            actor.side = indexSides[sideIndex];
-          }
+          const indexSide = await this.modelPredict(actor);
+          actor.side = indexSides[indexSide];
+        }
 
-          const { name, side } = actor;
-          this.step({ name, side });
-        })()));
+        const { name, side } = actor;
+        this.step({ name, side });
+
+        // todo
+        this.preserveExperience(actor);
+      })()));
+
+      this.stepsCount += 1;
+
+      if (this.stepsCount === maximumStepsCount) {
+        this.gameOver();
+      }
     },
 
     step({ name, side }) {
@@ -331,43 +334,40 @@ export default {
       const [cell] = actor.cells;
       const { position: { y, x } } = cell;
 
-      this[side]({ cell, y, x });
-
+      cell.position = this[side]({ y, x });
       this.nextCell(actor);
     },
 
-    stepTop({ cell, y, x }) {
-      cell.position = { y: y - 1, x };
+    stepTop({ y, x }) {
+      return { y: y - 1, x };
     },
 
-    stepRight({ cell, y, x }) {
-      cell.position = { y, x: x + 1 };
+    stepRight({ y, x }) {
+      return { y, x: x + 1 };
     },
 
-    stepBottom({ cell, y, x }) {
-      cell.position = { y: y + 1, x };
+    stepBottom({ y, x }) {
+      return { y: y + 1, x };
     },
 
-    stepLeft({ cell, y, x }) {
-      cell.position = { y, x: x - 1 };
+    stepLeft({ y, x }) {
+      return { y, x: x - 1 };
     },
 
     nextCell(actor) {
       const [{ position: { y, x } }] = actor.cells;
       const nextColor = this.field[y][x];
 
-      if (barriersColors.includes(nextColor)) {
-        console.log('nextCell');
+      this.estimationNextCell(actor);
 
-        this.saveTraining(actor);
-        this.barrierSideReward(actor);
+      if (barriersColors.includes(nextColor)) {
+        this.preserveExperience(actor);
         this.gameOver();
       } else {
         this.field[y].splice(x, 1, actor.colorHead);
 
         if (nextColor === appleColor) {
           this.growth({ actor, y, x });
-          this.saveTraining(actor);
 
           const coords = this.apples.find((a) => `${a.y}_${a.x}` === `${y}_${x}`);
           this.addApple(coords);
@@ -390,6 +390,7 @@ export default {
 
     gameOver() {
       this.isRunning = false;
+      this.stepsCount = 0;
 
       cancelAnimationFrame(nextFrameId);
       clearTimeout(nextFrameId);
@@ -409,7 +410,8 @@ export default {
       });
     },
 
-    // Алгоритм для ML ----------------------------------------------------------------------
+    // ------------------------- Алгоритм ML -------------------------------------------------
+
     setupModel({ model }) {
       model.add(tf.layers.dense({
         inputShape: [fieldSize ** 2],
@@ -433,99 +435,132 @@ export default {
       });
     },
 
-    // todo врага так же разметить как -1 (стена). отметить всех и себя тоже
-    // todo расстояние до ближайшего яблока.
+    // todo сканер для преград. расстояние? или следующая ячейка
+    // todo расстояние до ближайшего яблока
+    //  доля от расстояния до приближения к яблоку
+    //  то яблоко, что дальше, имеет меньшую ценность
+    // todo врага так же разметить как -1 (стена)
     estimationSides(actor) {
-      this.resetRewards(actor);
-
       const [{ position: actorHead }] = actor.cells;
-      this.applesSidesReward({ actor, actorHead });
-      this.searchForDirectPath({ actor, actorHead });
+      this.whichSidesOfApples({ actor, actorHead });
+      this.assessmentNearbyObstacles({ actor, actorHead });
     },
 
-    applesSidesReward({ actor, actorHead }) {
-      this.apples.forEach((apple) => {
-        if (apple.y < actorHead.y) {
-          if (apple.x < actorHead.x) {
-            // console.log('top left');
-            actor.rewards[sidesIndex.stepTop] = appleReward;
-            actor.rewards[sidesIndex.stepLeft] = appleReward;
-
-            actor.rewards[sidesIndex.stepRight] = barrierReward;
-            actor.rewards[sidesIndex.stepBottom] = barrierReward;
-          } else if (apple.x > actorHead.x) {
-            // console.log('top right');
-            actor.rewards[sidesIndex.stepTop] = appleReward;
-            actor.rewards[sidesIndex.stepRight] = appleReward;
-
-            actor.rewards[sidesIndex.stepBottom] = barrierReward;
-            actor.rewards[sidesIndex.stepLeft] = barrierReward;
-          }
-        } else if (apple.y > actorHead.y) {
-          if (apple.x > actorHead.x) {
-            // console.log('bottom right');
-            actor.rewards[sidesIndex.stepRight] = appleReward;
-            actor.rewards[sidesIndex.stepBottom] = appleReward;
-
-            actor.rewards[sidesIndex.stepTop] = barrierReward;
-            actor.rewards[sidesIndex.stepLeft] = barrierReward;
-          } else if (apple.x < actorHead.x) {
-            // console.log('bottom left');
-            actor.rewards[sidesIndex.stepBottom] = appleReward;
-            actor.rewards[sidesIndex.stepLeft] = appleReward;
-
-            actor.rewards[sidesIndex.stepTop] = barrierReward;
-            actor.rewards[sidesIndex.stepRight] = barrierReward;
-          }
-        }
-      });
-    },
-
-    searchForDirectPath({ actor, actorHead }) {
+    whichSidesOfApples({ actor, actorHead }) {
       this.apples.forEach((apple) => {
         if (apple.x === actorHead.x) {
-          if (apple.y > actorHead.y) {
-            // console.log('bottom');
-            actor.rewards[sidesIndex.stepBottom] = appleReward;
-
-            actor.rewards[sidesIndex.stepTop] = barrierReward;
-          } else if (apple.y < actorHead.y) {
-            // console.log('top');
-            actor.rewards[sidesIndex.stepTop] = appleReward;
-
-            actor.rewards[sidesIndex.stepBottom] = barrierReward;
-          }
+          this.appleOnAxisX({ apple, actor, actorHead });
         } else if (apple.y === actorHead.y) {
-          if (apple.x > actorHead.x) {
-            // console.log('right');
-            actor.rewards[sidesIndex.stepRight] = appleReward;
-
-            actor.rewards[sidesIndex.stepLeft] = barrierReward;
-          } else if (apple.x < actorHead.x) {
-            // console.log('left');
-            actor.rewards[sidesIndex.stepLeft] = appleReward;
-
-            actor.rewards[sidesIndex.stepRight] = barrierReward;
-          }
-        }
-      });
-
-      // appleReward
-      // console.log(actor.rewards);
-    },
-
-    barrierSideReward(actor) {
-      actor.rewards.forEach((_, rewardIndex) => {
-        if (sidesIndex[actor.side] === rewardIndex) {
-          actor.rewards[rewardIndex] = barrierReward;
-        } else {
-          actor.rewards[rewardIndex] = freeReward;
+          this.appleOnAxisY({ apple, actor, actorHead });
+        } else if (apple.y < actorHead.y) {
+          this.appleBelowAxisY({ apple, actor, actorHead });
+        } else if (apple.y > actorHead.y) {
+          this.appleAboveAxisY({ apple, actor, actorHead });
         }
       });
     },
 
-    // todo
-    saveTraining(actor) {
+    appleOnAxisX({ apple, actor, actorHead }) {
+      if (apple.y < actorHead.y) {
+        this.appleTop(actor);
+      } else if (apple.y > actorHead.y) {
+        this.appleBottom(actor);
+      }
+    },
+
+    appleTop(actor) {
+      actor.rewards[sidesIndex.stepTop] += appleReward;
+      actor.rewards[sidesIndex.stepBottom] += barrierReward;
+    },
+
+    appleBottom(actor) {
+      actor.rewards[sidesIndex.stepBottom] += appleReward;
+      actor.rewards[sidesIndex.stepTop] += barrierReward;
+    },
+
+    appleOnAxisY({ apple, actor, actorHead }) {
+      if (apple.x > actorHead.x) {
+        this.appleRight(actor);
+      } else if (apple.x < actorHead.x) {
+        this.appleLeft(actor);
+      }
+    },
+
+    appleRight(actor) {
+      actor.rewards[sidesIndex.stepRight] += appleReward;
+      actor.rewards[sidesIndex.stepLeft] += barrierReward;
+    },
+
+    appleLeft(actor) {
+      actor.rewards[sidesIndex.stepLeft] += appleReward;
+      actor.rewards[sidesIndex.stepRight] += barrierReward;
+    },
+
+    appleBelowAxisY({ apple, actor, actorHead }) {
+      if (apple.x < actorHead.x) {
+        this.appleTopLeft(actor);
+      } else if (apple.x > actorHead.x) {
+        this.appleTopRight(actor);
+      }
+    },
+
+    appleTopLeft(actor) {
+      actor.rewards[sidesIndex.stepTop] += appleReward;
+      actor.rewards[sidesIndex.stepLeft] += appleReward;
+
+      actor.rewards[sidesIndex.stepRight] += basicReward;
+      actor.rewards[sidesIndex.stepBottom] += basicReward;
+    },
+
+    appleTopRight(actor) {
+      actor.rewards[sidesIndex.stepTop] += appleReward;
+      actor.rewards[sidesIndex.stepRight] += appleReward;
+
+      actor.rewards[sidesIndex.stepBottom] += basicReward;
+      actor.rewards[sidesIndex.stepLeft] += basicReward;
+    },
+
+    appleAboveAxisY({ apple, actor, actorHead }) {
+      if (apple.x > actorHead.x) {
+        this.appleBottomRight(actor);
+      } else if (apple.x < actorHead.x) {
+        this.appleBottomLeft(actor);
+      }
+    },
+
+    appleBottomRight(actor) {
+      actor.rewards[sidesIndex.stepRight] += appleReward;
+      actor.rewards[sidesIndex.stepBottom] += appleReward;
+
+      actor.rewards[sidesIndex.stepTop] += basicReward;
+      actor.rewards[sidesIndex.stepLeft] += basicReward;
+    },
+
+    appleBottomLeft(actor) {
+      actor.rewards[sidesIndex.stepBottom] += appleReward;
+      actor.rewards[sidesIndex.stepLeft] += appleReward;
+
+      actor.rewards[sidesIndex.stepTop] += basicReward;
+      actor.rewards[sidesIndex.stepRight] += basicReward;
+    },
+
+    assessmentNearbyObstacles({ actor, actorHead: { y, x } }) {
+      ['stepTop', 'stepRight', 'stepBottom', 'stepLeft'].forEach((side, sideIndex) => {
+        const { y: nextY, x: nextX } = this[side]({ y, x });
+        const nextColor = this.field[nextY][nextX];
+
+        actor.rewards[sideIndex] += barriersColors.includes(nextColor) ? barrierReward : basicReward;
+      });
+    },
+
+    async modelPredict(actor) {
+      const inputs = this.fieldEstimation();
+      const sides = await actor.model.predict(tf.tensor2d([inputs])).data();
+
+      return sides.indexOf(Math.max(...sides));
+    },
+
+    fieldEstimation() {
       const inputs = [];
 
       this.field.forEach((row) => {
@@ -539,35 +574,30 @@ export default {
           }
         });
       });
+
+      return inputs;
+    },
+
+    estimationNextCell(actor) {
+      actor.rewards.forEach((_, rewardIndex) => {
+        if (sidesIndex[actor.side] === rewardIndex) {
+          actor.rewards[rewardIndex] += barrierReward;
+        } else {
+          actor.rewards[rewardIndex] += freeReward;
+        }
+      });
+    },
+
+    preserveExperience(actor) {
+      const inputs = this.fieldEstimation();
 
       actor.training.inputs.push(inputs);
       actor.training.labels.push(actor.rewards);
     },
 
-    async modelPredict(actor) {
-      // todo хмммм
-      const inputs = [];
-
-      this.field.forEach((row) => {
-        row.forEach((cell) => {
-          if (barriersColors.includes(cell)) {
-            inputs.push(barrierReward);
-          } else if (cell === appleColor) {
-            inputs.push(appleReward);
-          } else {
-            inputs.push(freeReward);
-          }
-        });
-      });
-      //
-
-      const predictions = await actor.model.predict(tf.tensor2d([inputs])).data();
-      return predictions.indexOf(Math.max(...predictions));
-    },
-
     modelFit(callbackAtEndTraining) {
       Promise.all(Object.values(this.actors).map(async (actor) => {
-        if (actor.training.inputs.length > 0 && actor.training.labels.length > 0) {
+        if (actor.training.labels.length > 0) {
           await actor.model.fit(
             tf.tensor2d(actor.training.inputs),
             tf.tensor2d(actor.training.labels),
@@ -575,6 +605,8 @@ export default {
 
           actor.training.inputs = [];
           actor.training.labels = [];
+
+          this.resetRewards(actor);
         }
       })).then(callbackAtEndTraining);
     },
