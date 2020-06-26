@@ -22,6 +22,14 @@
       Игра против AI начнётся по нажатию: WASD
     </div>
 
+    <div class="steps-count">
+      Количество оставшихся ходов: {{ maximumStepsCount - stepsCount }}
+    </div>
+
+    <div class="timer">
+      Время обучения: {{ timer }} секунд (~{{ Math.round(timer / 60) }} минут)
+    </div>
+
     <div class="actors">
       <div
         v-for="actor in Object.values(actors)"
@@ -51,8 +59,6 @@
 import * as tf from '@tensorflow/tfjs';
 import { nanoid } from 'nanoid';
 import cloneDeep from 'clone-deep';
-
-const fieldSize = 40;
 
 const barrierColor = '#111';
 const basicColor = '#222';
@@ -96,21 +102,20 @@ const sidesIndex = {
 
 const numberSides = Object.keys(indexSides).length;
 
-const autoMovementDelay = 150;
-const maximumStepsCount = fieldSize * 3;
+const fieldSize = 20;
 const isDevelopment = false;
+const autoMovementDelay = 200;
+
+const terribleReward = -1.0;
+const badReward = -0.3;
+const basicReward = 0.1;
+const goodReward = 0.3;
+const bestReward = 1.0;
 
 let nextFrameId = -1;
 
-// --- ML ---
-
-// Награды.
-const barrierReward = -1.0;
-const basicReward = 0.1;
-const freeReward = 0.3;
-const appleReward = 1.0;
-
-// todo добавить статичные преграды
+// todo статичные преграды
+// todo замедлялка
 
 export default {
   name: 'Snake',
@@ -129,11 +134,11 @@ export default {
           colorHead: actorsColors[0],
           colorTail: actorsColors[1],
           cells: [
+            { id: nanoid(), position: { y: 7, x: 3 } },
             { id: nanoid(), position: { y: 6, x: 3 } },
             { id: nanoid(), position: { y: 5, x: 3 } },
             { id: nanoid(), position: { y: 4, x: 3 } },
             { id: nanoid(), position: { y: 3, x: 3 } },
-            { id: nanoid(), position: { y: 2, x: 3 } },
           ],
 
           model: tf.sequential(),
@@ -147,11 +152,11 @@ export default {
         //   colorHead: actorsColors[2],
         //   colorTail: actorsColors[3],
         //   cells: [
-        //     { id: nanoid(), position: { y: fieldSize - 9, x: fieldSize - 4 } },
         //     { id: nanoid(), position: { y: fieldSize - 8, x: fieldSize - 4 } },
         //     { id: nanoid(), position: { y: fieldSize - 7, x: fieldSize - 4 } },
         //     { id: nanoid(), position: { y: fieldSize - 6, x: fieldSize - 4 } },
         //     { id: nanoid(), position: { y: fieldSize - 5, x: fieldSize - 4 } },
+        //     { id: nanoid(), position: { y: fieldSize - 4, x: fieldSize - 4 } },
         //   ],
         //
         //   model: tf.sequential(),
@@ -163,6 +168,8 @@ export default {
 
       stats: {}, // Инициализируется в initialStats на основе actors.
       stepsCount: 0,
+      maximumStepsCount: fieldSize * 5,
+      timer: 0,
 
       // todo для сбора двух и более яблок, нужен алгоритм ближайшего яблока + для обучения
       apples: [
@@ -183,6 +190,8 @@ export default {
     this.apples.forEach(this.addApple);
     this.autoStep();
 
+    this.incrementTimer();
+
     window.addEventListener('keydown', this.handleKeys);
   },
 
@@ -201,7 +210,7 @@ export default {
         field[y] = Array(fieldSize);
 
         for (let x = 0; x < fieldSize; x += 1) {
-          const isBarrier = y === 0 || y === fieldSize - 1 || x === 0 || x === fieldSize - 1;
+          const isBarrier = y <= 1 || y >= fieldSize - 2 || x <= 1 || x >= fieldSize - 2;
           field[y][x] = isBarrier ? barrierColor : basicColor;
         }
       }
@@ -238,6 +247,11 @@ export default {
           maxApples: 0,
         };
       });
+    },
+
+    incrementTimer() {
+      setTimeout(this.incrementTimer, 1000);
+      this.timer += 1;
     },
 
     resetStats() {
@@ -278,32 +292,6 @@ export default {
         nextFrameId = requestAnimationFrame(this.autoStep);
       } else if (this.mode === 'gaming') {
         nextFrameId = setTimeout(this.autoStep, autoMovementDelay);
-      }
-    },
-
-    async modelsPredicts() {
-      await Promise.all(Object.values(this.actors).map((actor) => (async () => {
-        if (this.mode === 'gaming' && actor.name === 'human') {
-          // pass
-          // this.estimationSides(actor);
-        } else {
-          this.estimationSides(actor);
-
-          const indexSide = await this.modelPredict(actor);
-          actor.side = indexSides[indexSide];
-        }
-
-        const { name, side } = actor;
-        this.step({ name, side });
-
-        // todo
-        this.preserveExperience(actor);
-      })()));
-
-      this.stepsCount += 1;
-
-      if (this.stepsCount === maximumStepsCount) {
-        this.gameOver();
       }
     },
 
@@ -358,10 +346,11 @@ export default {
       const [{ position: { y, x } }] = actor.cells;
       const nextColor = this.field[y][x];
 
-      this.estimationNextCell(actor);
+      // todo
+      this.fieldEstimation();
+      // this.preserveExperience(actor);
 
       if (barriersColors.includes(nextColor)) {
-        this.preserveExperience(actor);
         this.gameOver();
       } else {
         this.field[y].splice(x, 1, actor.colorHead);
@@ -371,6 +360,8 @@ export default {
 
           const coords = this.apples.find((a) => `${a.y}_${a.x}` === `${y}_${x}`);
           this.addApple(coords);
+
+          this.stepsCount = 0;
         }
       }
     },
@@ -410,13 +401,14 @@ export default {
       });
     },
 
-    // ------------------------- Алгоритм ML -------------------------------------------------
+    // -------------------------------------- Алгоритм ML -------------------------------------------------
 
+    // todo + близость яблока, преграды
     setupModel({ model }) {
       model.add(tf.layers.dense({
         inputShape: [fieldSize ** 2],
         activation: 'sigmoid',
-        units: 128,
+        units: 512,
       }));
 
       // model.add(tf.layers.dense({
@@ -435,6 +427,32 @@ export default {
       });
     },
 
+    async modelsPredicts() {
+      await Promise.all(Object.values(this.actors).map((actor) => (async () => {
+        if (this.mode === 'gaming' && actor.name === 'human') {
+          this.estimationSides(actor);
+        } else {
+          this.estimationSides(actor);
+
+          const indexSide = await this.modelPredict(actor);
+          actor.side = indexSides[indexSide];
+        }
+
+        const { name, side } = actor;
+        this.step({ name, side });
+
+        // todo
+        this.fieldEstimation();
+        // this.preserveExperience(actor);
+      })()));
+
+      this.stepsCount += 1;
+
+      if (this.stepsCount === this.maximumStepsCount) {
+        this.gameOver();
+      }
+    },
+
     // todo сканер для преград. расстояние? или следующая ячейка
     // todo расстояние до ближайшего яблока
     //  доля от расстояния до приближения к яблоку
@@ -442,6 +460,7 @@ export default {
     // todo врага так же разметить как -1 (стена)
     estimationSides(actor) {
       const [{ position: actorHead }] = actor.cells;
+
       this.whichSidesOfApples({ actor, actorHead });
       this.assessmentNearbyObstacles({ actor, actorHead });
     },
@@ -469,13 +488,13 @@ export default {
     },
 
     appleTop(actor) {
-      actor.rewards[sidesIndex.stepTop] += appleReward;
-      actor.rewards[sidesIndex.stepBottom] += barrierReward;
+      actor.rewards[sidesIndex.stepTop] = bestReward;
+      actor.rewards[sidesIndex.stepBottom] = terribleReward;
     },
 
     appleBottom(actor) {
-      actor.rewards[sidesIndex.stepBottom] += appleReward;
-      actor.rewards[sidesIndex.stepTop] += barrierReward;
+      actor.rewards[sidesIndex.stepBottom] = bestReward;
+      actor.rewards[sidesIndex.stepTop] = terribleReward;
     },
 
     appleOnAxisY({ apple, actor, actorHead }) {
@@ -487,13 +506,13 @@ export default {
     },
 
     appleRight(actor) {
-      actor.rewards[sidesIndex.stepRight] += appleReward;
-      actor.rewards[sidesIndex.stepLeft] += barrierReward;
+      actor.rewards[sidesIndex.stepRight] = bestReward;
+      actor.rewards[sidesIndex.stepLeft] = terribleReward;
     },
 
     appleLeft(actor) {
-      actor.rewards[sidesIndex.stepLeft] += appleReward;
-      actor.rewards[sidesIndex.stepRight] += barrierReward;
+      actor.rewards[sidesIndex.stepLeft] = bestReward;
+      actor.rewards[sidesIndex.stepRight] = terribleReward;
     },
 
     appleBelowAxisY({ apple, actor, actorHead }) {
@@ -505,19 +524,19 @@ export default {
     },
 
     appleTopLeft(actor) {
-      actor.rewards[sidesIndex.stepTop] += appleReward;
-      actor.rewards[sidesIndex.stepLeft] += appleReward;
+      actor.rewards[sidesIndex.stepTop] = bestReward;
+      actor.rewards[sidesIndex.stepLeft] = bestReward;
 
-      actor.rewards[sidesIndex.stepRight] += basicReward;
-      actor.rewards[sidesIndex.stepBottom] += basicReward;
+      actor.rewards[sidesIndex.stepRight] = badReward;
+      actor.rewards[sidesIndex.stepBottom] = badReward;
     },
 
     appleTopRight(actor) {
-      actor.rewards[sidesIndex.stepTop] += appleReward;
-      actor.rewards[sidesIndex.stepRight] += appleReward;
+      actor.rewards[sidesIndex.stepTop] = bestReward;
+      actor.rewards[sidesIndex.stepRight] = bestReward;
 
-      actor.rewards[sidesIndex.stepBottom] += basicReward;
-      actor.rewards[sidesIndex.stepLeft] += basicReward;
+      actor.rewards[sidesIndex.stepBottom] = badReward;
+      actor.rewards[sidesIndex.stepLeft] = badReward;
     },
 
     appleAboveAxisY({ apple, actor, actorHead }) {
@@ -529,34 +548,40 @@ export default {
     },
 
     appleBottomRight(actor) {
-      actor.rewards[sidesIndex.stepRight] += appleReward;
-      actor.rewards[sidesIndex.stepBottom] += appleReward;
+      actor.rewards[sidesIndex.stepRight] = bestReward;
+      actor.rewards[sidesIndex.stepBottom] = bestReward;
 
-      actor.rewards[sidesIndex.stepTop] += basicReward;
-      actor.rewards[sidesIndex.stepLeft] += basicReward;
+      actor.rewards[sidesIndex.stepTop] = badReward;
+      actor.rewards[sidesIndex.stepLeft] = badReward;
     },
 
     appleBottomLeft(actor) {
-      actor.rewards[sidesIndex.stepBottom] += appleReward;
-      actor.rewards[sidesIndex.stepLeft] += appleReward;
+      actor.rewards[sidesIndex.stepBottom] = bestReward;
+      actor.rewards[sidesIndex.stepLeft] = bestReward;
 
-      actor.rewards[sidesIndex.stepTop] += basicReward;
-      actor.rewards[sidesIndex.stepRight] += basicReward;
+      actor.rewards[sidesIndex.stepTop] = badReward;
+      actor.rewards[sidesIndex.stepRight] = badReward;
     },
 
     assessmentNearbyObstacles({ actor, actorHead: { y, x } }) {
+      // todo fn если сработает для inputs
       ['stepTop', 'stepRight', 'stepBottom', 'stepLeft'].forEach((side, sideIndex) => {
         const { y: nextY, x: nextX } = this[side]({ y, x });
         const nextColor = this.field[nextY][nextX];
 
-        actor.rewards[sideIndex] += barriersColors.includes(nextColor) ? barrierReward : basicReward;
+        if (barriersColors.includes(nextColor)) {
+          actor.rewards[sideIndex] = terribleReward;
+        }
       });
     },
 
     async modelPredict(actor) {
       const inputs = this.fieldEstimation();
-      const sides = await actor.model.predict(tf.tensor2d([inputs])).data();
 
+      // todo
+      // this.preserveExperience();
+
+      const sides = await actor.model.predict(tf.tensor2d([inputs])).data();
       return sides.indexOf(Math.max(...sides));
     },
 
@@ -566,11 +591,11 @@ export default {
       this.field.forEach((row) => {
         row.forEach((cell) => {
           if (barriersColors.includes(cell)) {
-            inputs.push(barrierReward);
+            inputs.push(terribleReward);
           } else if (cell === appleColor) {
-            inputs.push(appleReward);
+            inputs.push(bestReward);
           } else {
-            inputs.push(freeReward);
+            inputs.push(goodReward);
           }
         });
       });
@@ -578,18 +603,22 @@ export default {
       return inputs;
     },
 
-    estimationNextCell(actor) {
-      actor.rewards.forEach((_, rewardIndex) => {
-        if (sidesIndex[actor.side] === rewardIndex) {
-          actor.rewards[rewardIndex] += barrierReward;
+    // todo
+    preserveExperience(actor) {
+      const [{ position: { y, x } }] = actor.cells;
+      const inputs = [];
+
+      ['stepTop', 'stepRight', 'stepBottom', 'stepLeft'].forEach((side) => {
+        // todo может выскакивать за пределы поля
+        const { y: nextY, x: nextX } = this[side]({ y, x });
+        const nextColor = this.field[nextY][nextX];
+
+        if (barriersColors.includes(nextColor)) {
+          inputs.push(terribleReward);
         } else {
-          actor.rewards[rewardIndex] += freeReward;
+          inputs.push(goodReward);
         }
       });
-    },
-
-    preserveExperience(actor) {
-      const inputs = this.fieldEstimation();
 
       actor.training.inputs.push(inputs);
       actor.training.labels.push(actor.rewards);
@@ -652,6 +681,16 @@ export default {
     margin-top: 10px;
     text-align: center;
     color: gray;
+  }
+
+  .steps-count {
+    text-align: center;
+    color: gray;
+  }
+
+  .timer {
+    font-size: 12px;
+    color: dimgray;
   }
 
   .actors {
