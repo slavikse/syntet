@@ -40,14 +40,14 @@ body {
 
 .money {
   position: absolute;
-  z-index: 1000;
+  z-index: 10;
   right: 0;
   bottom: 0;
 }
 </style>
 
 <% if (process.env.NODE_ENV === 'production') { %>
-<!-- Yandex.Metrika -->
+<!-- Yandex.Metrika counter -->
 <script type="text/javascript">
    (function (m, e, t, r, i, k, a) {
      m[i] = m[i] || function () {(m[i].a = m[i].a || []).push(arguments);};
@@ -59,12 +59,13 @@ body {
      clickmap: true,
      trackLinks: true,
      accurateTrackBounce: true,
+     webvisor: true,
    });
 </script>
 <noscript>
-  <img src="https://mc.yandex.ru/watch/64632112" style="position:absolute; left:-9999px;" alt="" />
+  <div><img src="https://mc.yandex.ru/watch/64632112" style="position:absolute; left:-9999px;" alt="" /></div>
 </noscript>
-<!-- /Yandex.Metrika -->
+<!-- /Yandex.Metrika counter -->
 
 <iframe
   src="https://money.yandex.ru/quickpay/shop-widget?writer=seller&targets=%D0%9F%D0%BE%D0%B4%D0%B4%D0%B5%D1%80%D0%B6%D0%BA%D0%B0%20%D0%BF%D1%80%D0%BE%D0%B5%D0%BA%D1%82%D0%B0%20%D0%BF%D0%BE%20%D0%BC%D0%B0%D1%88%D0%B8%D0%BD%D0%BD%D0%BE%D0%BC%D1%83%20%D0%BE%D0%B1%D1%83%D1%87%D0%B5%D0%BD%D0%B8%D1%8E%20%D1%81%20%D0%BF%D0%BE%D0%B4%D0%BA%D1%80%D0%B5%D0%BF%D0%BB%D0%B5%D0%BD%D0%B8%D0%B5%D0%BC&targets-hint=&default-sum=50&button-text=11&hint=&successURL=&quickpay=shop&account=410011000753520"

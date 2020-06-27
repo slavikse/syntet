@@ -1,8 +1,5 @@
 <template>
-  <div
-    ref="snake"
-    class="Snake"
-  >
+  <div class="Snake">
     <div class="field">
       <div
         v-for="(row, rowIndex) in field"
@@ -14,7 +11,9 @@
           :key="`${rowIndex}_${cellIndex}`"
           :style="{ backgroundColor: cell }"
           class="cell"
-        />
+        >
+          <!-- {{ rowIndex }} {{ cellIndex }}-->
+        </div>
       </div>
     </div>
 
@@ -102,20 +101,21 @@ const sidesIndex = {
 
 const numberSides = Object.keys(indexSides).length;
 
-const fieldSize = 20;
 const isDevelopment = false;
-const autoMovementDelay = 200;
+const fieldSize = 30;
+const autoMovementDelay = 500;
 
 const terribleReward = -1.0;
-const badReward = -0.3;
+const badReward = -1.0; // -0.4
 const basicReward = 0.1;
-const goodReward = 0.3;
-const bestReward = 1.0;
+const goodReward = 1.0; // 0.8
+const bestReward = 5.0;
+const excellentReward = 10.0; // 2.0
+const epochs = 32;
 
 let nextFrameId = -1;
 
 // todo статичные преграды
-// todo замедлялка
 
 export default {
   name: 'Snake',
@@ -152,11 +152,11 @@ export default {
         //   colorHead: actorsColors[2],
         //   colorTail: actorsColors[3],
         //   cells: [
-        //     { id: nanoid(), position: { y: fieldSize - 8, x: fieldSize - 4 } },
-        //     { id: nanoid(), position: { y: fieldSize - 7, x: fieldSize - 4 } },
         //     { id: nanoid(), position: { y: fieldSize - 6, x: fieldSize - 4 } },
         //     { id: nanoid(), position: { y: fieldSize - 5, x: fieldSize - 4 } },
         //     { id: nanoid(), position: { y: fieldSize - 4, x: fieldSize - 4 } },
+        //     { id: nanoid(), position: { y: fieldSize - 3, x: fieldSize - 4 } },
+        //     { id: nanoid(), position: { y: fieldSize - 2, x: fieldSize - 4 } },
         //   ],
         //
         //   model: tf.sequential(),
@@ -168,7 +168,7 @@ export default {
 
       stats: {}, // Инициализируется в initialStats на основе actors.
       stepsCount: 0,
-      maximumStepsCount: fieldSize * 5,
+      maximumStepsCount: fieldSize * 10,
       timer: 0,
 
       // todo для сбора двух и более яблок, нужен алгоритм ближайшего яблока + для обучения
@@ -201,9 +201,6 @@ export default {
 
   methods: {
     initialField() {
-      this.$refs.snake.style.setProperty('--rows', String(fieldSize));
-      this.$refs.snake.style.setProperty('--columns', String(fieldSize));
-
       const field = Array(fieldSize);
 
       for (let y = 0; y < fieldSize; y += 1) {
@@ -289,18 +286,17 @@ export default {
       }
 
       if (this.mode === 'training') {
+        // nextFrameId = setTimeout(this.autoStep, autoMovementDelay);
         nextFrameId = requestAnimationFrame(this.autoStep);
       } else if (this.mode === 'gaming') {
         nextFrameId = setTimeout(this.autoStep, autoMovementDelay);
       }
     },
 
-    step({ name, side }) {
-      const actor = this.actors[name];
-
+    step(actor) {
       this.clearTail(actor);
       this.stepTail(actor);
-      this.stepHead({ actor, side });
+      this.stepHead(actor);
     },
 
     clearTail({ cells }) {
@@ -318,12 +314,11 @@ export default {
       }
     },
 
-    stepHead({ actor, side }) {
-      const [cell] = actor.cells;
-      const { position: { y, x } } = cell;
+    stepHead(actor) {
+      const [cellHead] = actor.cells;
+      const { y, x } = this[actor.side](cellHead.position);
 
-      cell.position = this[side]({ y, x });
-      this.nextCell(actor);
+      this.nextCell({ actor, cellHead, y, x });
     },
 
     stepTop({ y, x }) {
@@ -342,27 +337,28 @@ export default {
       return { y, x: x - 1 };
     },
 
-    nextCell(actor) {
-      const [{ position: { y, x } }] = actor.cells;
+    nextCell({ actor, cellHead, y, x }) {
       const nextColor = this.field[y][x];
 
-      // todo
-      this.fieldEstimation();
-      // this.preserveExperience(actor);
-
       if (barriersColors.includes(nextColor)) {
+        // this.changeExperienceReward({ type: 'decrease', actor });
+        this.preserveExperience(actor);
         this.gameOver();
       } else {
-        this.field[y].splice(x, 1, actor.colorHead);
-
+        /* eslint-disable */
         if (nextColor === appleColor) {
+          // this.changeExperienceReward({ type: 'increase', actor });
+          this.preserveExperience(actor);
           this.growth({ actor, y, x });
 
           const coords = this.apples.find((a) => `${a.y}_${a.x}` === `${y}_${x}`);
           this.addApple(coords);
-
-          this.stepsCount = 0;
+        } else {
+          // this.preserveExperience(actor);
         }
+
+        cellHead.position = { y, x };
+        this.field[y][x] = actor.colorHead;
       }
     },
 
@@ -372,6 +368,9 @@ export default {
       if (this.stats[actor.name].apples > this.stats[actor.name].maxApples) {
         this.stats[actor.name].maxApples = this.stats[actor.name].apples;
       }
+
+      // todo индивидуальную? которая просто остановит игру для игрока, а другой будет играть?
+      this.stepsCount = 0;
 
       actor.cells.push({
         id: nanoid(),
@@ -401,19 +400,25 @@ export default {
       });
     },
 
-    // -------------------------------------- Алгоритм ML -------------------------------------------------
+    // ----------------------------------------- Алгоритм ML -------------------------------------------------
 
     // todo + близость яблока, преграды
     setupModel({ model }) {
       model.add(tf.layers.dense({
-        inputShape: [fieldSize ** 2],
+        // todo
+        inputShape: [numberSides], // fieldSize ** 2
         activation: 'sigmoid',
-        units: 512,
+        units: 1024,
       }));
 
       // model.add(tf.layers.dense({
       //   activation: 'sigmoid',
-      //   units: 128,
+      //   units: 32,
+      // }));
+      //
+      // model.add(tf.layers.dense({
+      //   activation: 'sigmoid',
+      //   units: 24,
       // }));
 
       model.add(tf.layers.dense({
@@ -427,23 +432,28 @@ export default {
       });
     },
 
+    // todo сканер для далёких (ближайшая уже оценивается) преград? расстояние?
+    // todo для двух и более яблок: расстояние до ближайшего яблока
+    //  доля от расстояния до приближения к яблоку то яблоко, что дальше, имеет меньшую ценность
+    // todo врага так же разметить как -1 (стена)
     async modelsPredicts() {
       await Promise.all(Object.values(this.actors).map((actor) => (async () => {
-        if (this.mode === 'gaming' && actor.name === 'human') {
-          this.estimationSides(actor);
-        } else {
-          this.estimationSides(actor);
+        const [{ position: actorHead }] = actor.cells;
 
+        // todo оценивается предыдущая ячейка головы???
+        this.whichSidesOfApples({ actor, actorHead });
+        this.assessmentNearbyObstacles({ actor, actorHead });
+
+        // console.log(actor.rewards);
+
+        if (this.mode === 'gaming' && actor.name === 'human') {
+          // pass
+        } else {
           const indexSide = await this.modelPredict(actor);
           actor.side = indexSides[indexSide];
         }
 
-        const { name, side } = actor;
-        this.step({ name, side });
-
-        // todo
-        this.fieldEstimation();
-        // this.preserveExperience(actor);
+        this.step(actor);
       })()));
 
       this.stepsCount += 1;
@@ -451,18 +461,6 @@ export default {
       if (this.stepsCount === this.maximumStepsCount) {
         this.gameOver();
       }
-    },
-
-    // todo сканер для преград. расстояние? или следующая ячейка
-    // todo расстояние до ближайшего яблока
-    //  доля от расстояния до приближения к яблоку
-    //  то яблоко, что дальше, имеет меньшую ценность
-    // todo врага так же разметить как -1 (стена)
-    estimationSides(actor) {
-      const [{ position: actorHead }] = actor.cells;
-
-      this.whichSidesOfApples({ actor, actorHead });
-      this.assessmentNearbyObstacles({ actor, actorHead });
     },
 
     whichSidesOfApples({ actor, actorHead }) {
@@ -524,16 +522,16 @@ export default {
     },
 
     appleTopLeft(actor) {
-      actor.rewards[sidesIndex.stepTop] = bestReward;
-      actor.rewards[sidesIndex.stepLeft] = bestReward;
+      actor.rewards[sidesIndex.stepTop] = goodReward;
+      actor.rewards[sidesIndex.stepLeft] = goodReward;
 
       actor.rewards[sidesIndex.stepRight] = badReward;
       actor.rewards[sidesIndex.stepBottom] = badReward;
     },
 
     appleTopRight(actor) {
-      actor.rewards[sidesIndex.stepTop] = bestReward;
-      actor.rewards[sidesIndex.stepRight] = bestReward;
+      actor.rewards[sidesIndex.stepTop] = goodReward;
+      actor.rewards[sidesIndex.stepRight] = goodReward;
 
       actor.rewards[sidesIndex.stepBottom] = badReward;
       actor.rewards[sidesIndex.stepLeft] = badReward;
@@ -548,24 +546,23 @@ export default {
     },
 
     appleBottomRight(actor) {
-      actor.rewards[sidesIndex.stepRight] = bestReward;
-      actor.rewards[sidesIndex.stepBottom] = bestReward;
+      actor.rewards[sidesIndex.stepRight] = goodReward;
+      actor.rewards[sidesIndex.stepBottom] = goodReward;
 
       actor.rewards[sidesIndex.stepTop] = badReward;
       actor.rewards[sidesIndex.stepLeft] = badReward;
     },
 
     appleBottomLeft(actor) {
-      actor.rewards[sidesIndex.stepBottom] = bestReward;
-      actor.rewards[sidesIndex.stepLeft] = bestReward;
+      actor.rewards[sidesIndex.stepBottom] = goodReward;
+      actor.rewards[sidesIndex.stepLeft] = goodReward;
 
       actor.rewards[sidesIndex.stepTop] = badReward;
       actor.rewards[sidesIndex.stepRight] = badReward;
     },
 
     assessmentNearbyObstacles({ actor, actorHead: { y, x } }) {
-      // todo fn если сработает для inputs
-      ['stepTop', 'stepRight', 'stepBottom', 'stepLeft'].forEach((side, sideIndex) => {
+      Object.keys(sidesIndex).forEach((side, sideIndex) => {
         const { y: nextY, x: nextX } = this[side]({ y, x });
         const nextColor = this.field[nextY][nextX];
 
@@ -576,47 +573,56 @@ export default {
     },
 
     async modelPredict(actor) {
-      const inputs = this.fieldEstimation();
+      // const inputs = this.fieldEstimation();
+      const inputs = [];
+      const [{ position: { y, x } }] = actor.cells;
 
-      // todo
-      // this.preserveExperience();
+      Object.keys(sidesIndex).forEach((side, sideIndex) => {
+        const { y: nextY, x: nextX } = this[side]({ y, x });
+        const nextColor = this.field[nextY][nextX];
+
+        if (barriersColors.includes(nextColor)) {
+          inputs[sideIndex] = terribleReward;
+        } else {
+          inputs[sideIndex] = goodReward;
+        }
+      });
 
       const sides = await actor.model.predict(tf.tensor2d([inputs])).data();
       return sides.indexOf(Math.max(...sides));
     },
 
-    fieldEstimation() {
-      const inputs = [];
+    // todo сюда добавлять оценку интересных объектов или в rewards? или и туда и туда?
+    // fieldEstimation() {
+    //   const inputs = [];
+    //
+    //   this.field.forEach((row) => {
+    //     row.forEach((cell) => {
+    //       if (barriersColors.includes(cell)) {
+    //         inputs.push(terribleReward);
+    //       } else if (cell === appleColor) {
+    //         inputs.push(bestReward);
+    //       } else {
+    //         inputs.push(goodReward);
+    //       }
+    //     });
+    //   });
+    //
+    //   return inputs;
+    // },
 
-      this.field.forEach((row) => {
-        row.forEach((cell) => {
-          if (barriersColors.includes(cell)) {
-            inputs.push(terribleReward);
-          } else if (cell === appleColor) {
-            inputs.push(bestReward);
-          } else {
-            inputs.push(goodReward);
-          }
-        });
-      });
-
-      return inputs;
-    },
-
-    // todo
     preserveExperience(actor) {
-      const [{ position: { y, x } }] = actor.cells;
       const inputs = [];
+      const [{ position: { y, x } }] = actor.cells;
 
-      ['stepTop', 'stepRight', 'stepBottom', 'stepLeft'].forEach((side) => {
-        // todo может выскакивать за пределы поля
+      Object.keys(sidesIndex).forEach((side, sideIndex) => {
         const { y: nextY, x: nextX } = this[side]({ y, x });
         const nextColor = this.field[nextY][nextX];
 
         if (barriersColors.includes(nextColor)) {
-          inputs.push(terribleReward);
+          inputs[sideIndex] = terribleReward;
         } else {
-          inputs.push(goodReward);
+          inputs[sideIndex] = goodReward;
         }
       });
 
@@ -624,12 +630,23 @@ export default {
       actor.training.labels.push(actor.rewards);
     },
 
+    changeExperienceReward({ type, actor }) {
+      if (type === 'decrease') {
+        actor.rewards[sidesIndex[actor.side]] = terribleReward;
+      } else if (type === 'increase') {
+        actor.rewards[sidesIndex[actor.side]] = excellentReward;
+      }
+    },
+
+    // todo если было собрано яблоко, то все ходы сделанные для сбора, получают +1, те, которые не меньше 0
+    // те, которые привели в проигрышу занижаются.
     modelFit(callbackAtEndTraining) {
       Promise.all(Object.values(this.actors).map(async (actor) => {
         if (actor.training.labels.length > 0) {
           await actor.model.fit(
             tf.tensor2d(actor.training.inputs),
             tf.tensor2d(actor.training.labels),
+            { epochs },
           );
 
           actor.training.inputs = [];
@@ -648,9 +665,7 @@ export default {
   scoped
 >
 .Snake {
-  --rows: -1;
-  --columns: -1;
-  --size: 25px;
+  --size: 30px;
 
   margin-top: 20px;
   display: flex;
@@ -660,18 +675,16 @@ export default {
   outline: none;
 
   .field {
-    display: grid;
-    grid-template-rows: repeat(var(--rows), var(--size));
-
     .row {
-      display: grid;
-      grid-template-columns: repeat(var(--columns), var(--size));
+      display: flex;
 
       .cell {
         display: flex;
         justify-content: center;
         align-items: center;
-        font-size: 12px;
+        width: var(--size);
+        height: var(--size);
+        font-size: 10px;
         color: #555;
       }
     }
