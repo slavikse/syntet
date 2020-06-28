@@ -18,7 +18,7 @@
     </div>
 
     <div class="message">
-      Игра против AI начнётся по нажатию: WASD
+      По нажатию WASD начнётся игра
     </div>
 
     <div class="steps-count">
@@ -106,14 +106,46 @@ const fieldSize = 30;
 const autoMovementDelay = 500;
 
 const terribleReward = -1.0;
-const badReward = -1.0; // -0.4
+const badReward = -0.1;
 const basicReward = 0.1;
-const goodReward = 1.0; // 0.8
-const bestReward = 5.0;
-const excellentReward = 10.0; // 2.0
-const epochs = 32;
+const goodReward = 0.5;
+const bestReward = 1.0;
+
+const units = 128;
+const epochs = 16;
 
 let nextFrameId = -1;
+
+const startPositions = {
+  topLeft: [
+    { id: nanoid(), position: { y: 7, x: 3 } },
+    { id: nanoid(), position: { y: 6, x: 3 } },
+    { id: nanoid(), position: { y: 5, x: 3 } },
+    { id: nanoid(), position: { y: 4, x: 3 } },
+    { id: nanoid(), position: { y: 3, x: 3 } },
+  ],
+  topRight: [
+    { id: nanoid(), position: { y: 3, x: fieldSize - 8 } },
+    { id: nanoid(), position: { y: 3, x: fieldSize - 7 } },
+    { id: nanoid(), position: { y: 3, x: fieldSize - 6 } },
+    { id: nanoid(), position: { y: 3, x: fieldSize - 5 } },
+    { id: nanoid(), position: { y: 3, x: fieldSize - 4 } },
+  ],
+  bottomRight: [
+    { id: nanoid(), position: { y: fieldSize - 8, x: fieldSize - 4 } },
+    { id: nanoid(), position: { y: fieldSize - 7, x: fieldSize - 4 } },
+    { id: nanoid(), position: { y: fieldSize - 6, x: fieldSize - 4 } },
+    { id: nanoid(), position: { y: fieldSize - 5, x: fieldSize - 4 } },
+    { id: nanoid(), position: { y: fieldSize - 4, x: fieldSize - 4 } },
+  ],
+  // bottomLeft: [
+  //   { id: nanoid(), position: { y: fieldSize - 4, x: 7 } },
+  //   { id: nanoid(), position: { y: fieldSize - 4, x: 6 } },
+  //   { id: nanoid(), position: { y: fieldSize - 4, x: 5 } },
+  //   { id: nanoid(), position: { y: fieldSize - 4, x: 4 } },
+  //   { id: nanoid(), position: { y: fieldSize - 4, x: 3 } },
+  // ],
+};
 
 // todo статичные преграды
 
@@ -133,42 +165,36 @@ export default {
 
           colorHead: actorsColors[0],
           colorTail: actorsColors[1],
-          cells: [
-            { id: nanoid(), position: { y: 7, x: 3 } },
-            { id: nanoid(), position: { y: 6, x: 3 } },
-            { id: nanoid(), position: { y: 5, x: 3 } },
-            { id: nanoid(), position: { y: 4, x: 3 } },
-            { id: nanoid(), position: { y: 3, x: 3 } },
+          cells: cloneDeep(startPositions.topLeft),
+
+          model: tf.sequential(),
+          training: { inputs: [], labels: [] },
+          rewards: Array(numberSides).fill(basicReward),
+        },
+        ai: {
+          name: 'ai',
+          side: 'stepTop',
+
+          colorHead: actorsColors[2],
+          colorTail: actorsColors[3],
+          cells: [ // bottomLeft
+            { id: nanoid(), position: { y: fieldSize - 4, x: 7 } },
+            { id: nanoid(), position: { y: fieldSize - 4, x: 6 } },
+            { id: nanoid(), position: { y: fieldSize - 4, x: 5 } },
+            { id: nanoid(), position: { y: fieldSize - 4, x: 4 } },
+            { id: nanoid(), position: { y: fieldSize - 4, x: 3 } },
           ],
 
           model: tf.sequential(),
           training: { inputs: [], labels: [] },
           rewards: Array(numberSides).fill(basicReward),
         },
-        // ai: {
-        //   name: 'ai',
-        //   side: 'stepTop',
-        //
-        //   colorHead: actorsColors[2],
-        //   colorTail: actorsColors[3],
-        //   cells: [
-        //     { id: nanoid(), position: { y: fieldSize - 6, x: fieldSize - 4 } },
-        //     { id: nanoid(), position: { y: fieldSize - 5, x: fieldSize - 4 } },
-        //     { id: nanoid(), position: { y: fieldSize - 4, x: fieldSize - 4 } },
-        //     { id: nanoid(), position: { y: fieldSize - 3, x: fieldSize - 4 } },
-        //     { id: nanoid(), position: { y: fieldSize - 2, x: fieldSize - 4 } },
-        //   ],
-        //
-        //   model: tf.sequential(),
-        //   training: { inputs: [], labels: [] },
-        //   rewards: Array(numberSides).fill(basicReward),
-        // },
       },
       actorsDefault: {},
 
       stats: {}, // Инициализируется в initialStats на основе actors.
       stepsCount: 0,
-      maximumStepsCount: fieldSize * 10,
+      maximumStepsCount: fieldSize * 5,
       timer: 0,
 
       // todo для сбора двух и более яблок, нужен алгоритм ближайшего яблока + для обучения
@@ -212,6 +238,16 @@ export default {
         }
       }
 
+      // field[10][3] = barrierColor;
+      // field[10][4] = barrierColor;
+      // field[10][5] = barrierColor;
+      // field[10][6] = barrierColor;
+      // field[10][7] = barrierColor;
+      // field[10][8] = barrierColor;
+      // field[10][9] = barrierColor;
+      // field[10][10] = barrierColor;
+      // field[10][11] = barrierColor;
+
       this.field = field;
       this.fieldDefault = cloneDeep(this.field);
     },
@@ -221,6 +257,15 @@ export default {
       this.actorsDefault = cloneDeep(this.actors);
 
       this.resetActors();
+    },
+
+    chooseActorsPosition() {
+      const positions = Object.keys(startPositions);
+      const position = positions[Math.round((positions.length - 1) * Math.random())];
+
+      Object.values(this.actors).forEach((actor) => {
+        actor.cells = cloneDeep(startPositions[position]);
+      });
     },
 
     resetActors() {
@@ -286,7 +331,6 @@ export default {
       }
 
       if (this.mode === 'training') {
-        // nextFrameId = setTimeout(this.autoStep, autoMovementDelay);
         nextFrameId = requestAnimationFrame(this.autoStep);
       } else if (this.mode === 'gaming') {
         nextFrameId = setTimeout(this.autoStep, autoMovementDelay);
@@ -341,13 +385,13 @@ export default {
       const nextColor = this.field[y][x];
 
       if (barriersColors.includes(nextColor)) {
-        // this.changeExperienceReward({ type: 'decrease', actor });
+        this.changeExperienceReward({ type: 'decrease', actor });
         this.preserveExperience(actor);
         this.gameOver();
       } else {
         /* eslint-disable */
         if (nextColor === appleColor) {
-          // this.changeExperienceReward({ type: 'increase', actor });
+          this.changeExperienceReward({ type: 'increase', actor });
           this.preserveExperience(actor);
           this.growth({ actor, y, x });
 
@@ -390,6 +434,7 @@ export default {
         this.field = cloneDeep(this.fieldDefault);
         this.actors = cloneDeep(this.actorsDefault);
 
+        this.chooseActorsPosition();
         this.resetActors();
         this.resetStats();
 
@@ -402,24 +447,19 @@ export default {
 
     // ----------------------------------------- Алгоритм ML -------------------------------------------------
 
-    // todo + близость яблока, преграды
+    // todo преграды
     setupModel({ model }) {
       model.add(tf.layers.dense({
-        // todo
-        inputShape: [numberSides], // fieldSize ** 2
+        inputShape: [
+          // todo оценка количества ходов. чем меньше было сделано для получения яблока, тем выше награда.
+          // Сканеры следующих ячеек для 4 сторон.
+          numberSides
+          // Расстояние до яблок, чем оно меньше, тем выше награда.
+          + this.apples.length,
+        ],
         activation: 'sigmoid',
-        units: 1024,
+        units,
       }));
-
-      // model.add(tf.layers.dense({
-      //   activation: 'sigmoid',
-      //   units: 32,
-      // }));
-      //
-      // model.add(tf.layers.dense({
-      //   activation: 'sigmoid',
-      //   units: 24,
-      // }));
 
       model.add(tf.layers.dense({
         activation: 'sigmoid',
@@ -433,8 +473,6 @@ export default {
     },
 
     // todo сканер для далёких (ближайшая уже оценивается) преград? расстояние?
-    // todo для двух и более яблок: расстояние до ближайшего яблока
-    //  доля от расстояния до приближения к яблоку то яблоко, что дальше, имеет меньшую ценность
     // todo врага так же разметить как -1 (стена)
     async modelsPredicts() {
       await Promise.all(Object.values(this.actors).map((actor) => (async () => {
@@ -442,11 +480,12 @@ export default {
 
         // todo оценивается предыдущая ячейка головы???
         this.whichSidesOfApples({ actor, actorHead });
-        this.assessmentNearbyObstacles({ actor, actorHead });
+        // this.assessmentNearbyObstacles({ actor, actorHead });
 
         // console.log(actor.rewards);
 
         if (this.mode === 'gaming' && actor.name === 'human') {
+          await this.modelPredict(actor);
           // pass
         } else {
           const indexSide = await this.modelPredict(actor);
@@ -561,39 +600,64 @@ export default {
       actor.rewards[sidesIndex.stepRight] = badReward;
     },
 
-    assessmentNearbyObstacles({ actor, actorHead: { y, x } }) {
-      Object.keys(sidesIndex).forEach((side, sideIndex) => {
-        const { y: nextY, x: nextX } = this[side]({ y, x });
-        const nextColor = this.field[nextY][nextX];
-
-        if (barriersColors.includes(nextColor)) {
-          actor.rewards[sideIndex] = terribleReward;
-        }
-      });
-    },
-
+    // const inputs = [];
+    // const [{ position: { y, x } }] = actor.cells;
+    //
+    // Object.keys(sidesIndex).forEach((side, sideIndex) => {
+    //   const { y: nextY, x: nextX } = this[side]({ y, x });
+    //   const nextColor = this.field[nextY][nextX];
+    //
+    //   if (barriersColors.includes(nextColor)) {
+    //     inputs[sideIndex] = terribleReward;
+    //   } else {
+    //     inputs[sideIndex] = goodReward;
+    //   }
+    // });
+    // todo 4 ближние стороны
     async modelPredict(actor) {
-      // const inputs = this.fieldEstimation();
-      const inputs = [];
-      const [{ position: { y, x } }] = actor.cells;
-
-      Object.keys(sidesIndex).forEach((side, sideIndex) => {
-        const { y: nextY, x: nextX } = this[side]({ y, x });
-        const nextColor = this.field[nextY][nextX];
-
-        if (barriersColors.includes(nextColor)) {
-          inputs[sideIndex] = terribleReward;
-        } else {
-          inputs[sideIndex] = goodReward;
-        }
-      });
-
+      // const inputs = this.fieldEstimation(actor);
+      const inputs = this.assessmentNearbyObstacles(actor);
       const sides = await actor.model.predict(tf.tensor2d([inputs])).data();
+
       return sides.indexOf(Math.max(...sides));
     },
 
-    // todo сюда добавлять оценку интересных объектов или в rewards? или и туда и туда?
-    // fieldEstimation() {
+    assessmentNearbyObstacles(actor) {
+      const [{ position: actorHead }] = actor.cells;
+      const inputs = [];
+
+      Object.keys(sidesIndex).forEach((side) => {
+        const { y: nextY, x: nextX } = this[side]({ y: actorHead.y, x: actorHead.x });
+        const nextColor = this.field[nextY][nextX];
+
+        if (barriersColors.includes(nextColor)) {
+          inputs.push(terribleReward);
+        } else if (nextColor === appleColor) {
+          inputs.push(bestReward);
+        } else {
+          inputs.push(goodReward);
+        }
+      });
+
+      this.apples.forEach((apple) => {
+        const distance = this.distanceToApple({ apple, actorHead });
+        inputs.push(((fieldSize - distance) / fieldSize));
+      });
+
+      // console.log('inputs', inputs);
+
+      return inputs;
+    },
+
+    distanceToApple({ apple, actorHead }) {
+      const x = Math.pow(apple.x - actorHead.x, 2);
+      const y = Math.pow(apple.y - actorHead.y, 2);
+
+      return Math.sqrt(x + y);
+    },
+
+    // todo сюда добавлять оценку интересных объектов
+    // fieldEstimation(actor) {
     //   const inputs = [];
     //
     //   this.field.forEach((row) => {
@@ -608,23 +672,32 @@ export default {
     //     });
     //   });
     //
+    //   const [{ position: actorHead }] = actor.cells;
+    //
+    //   this.apples.forEach((apple) => {
+    //     const distance = this.distanceToApple({ apple, actorHead });
+    //     inputs.push((fieldSize - distance) / fieldSize * multiplierAppleDistanceReward);
+    //   });
+    //
     //   return inputs;
     // },
 
+    // const inputs = [];
+    // const [{ position: { y, x } }] = actor.cells;
+    //
+    // Object.keys(sidesIndex).forEach((side, sideIndex) => {
+    //   const { y: nextY, x: nextX } = this[side]({ y, x });
+    //   const nextColor = this.field[nextY][nextX];
+    //
+    //   if (barriersColors.includes(nextColor)) {
+    //     inputs[sideIndex] = terribleReward;
+    //   } else {
+    //     inputs[sideIndex] = goodReward;
+    //   }
+    // });
     preserveExperience(actor) {
-      const inputs = [];
-      const [{ position: { y, x } }] = actor.cells;
-
-      Object.keys(sidesIndex).forEach((side, sideIndex) => {
-        const { y: nextY, x: nextX } = this[side]({ y, x });
-        const nextColor = this.field[nextY][nextX];
-
-        if (barriersColors.includes(nextColor)) {
-          inputs[sideIndex] = terribleReward;
-        } else {
-          inputs[sideIndex] = goodReward;
-        }
-      });
+      // const inputs = this.fieldEstimation(actor);
+      const inputs = this.assessmentNearbyObstacles(actor);
 
       actor.training.inputs.push(inputs);
       actor.training.labels.push(actor.rewards);
@@ -634,7 +707,7 @@ export default {
       if (type === 'decrease') {
         actor.rewards[sidesIndex[actor.side]] = terribleReward;
       } else if (type === 'increase') {
-        actor.rewards[sidesIndex[actor.side]] = excellentReward;
+        actor.rewards[sidesIndex[actor.side]] = bestReward;
       }
     },
 
