@@ -194,6 +194,8 @@ export default {
           training: { inputs: [], labels: [] },
           rewards: Array(numberSides).fill(basicReward),
         },
+        // todo при продолжении отвязать игроков, чтобы каждый играл свою игру. сейчас при проигрыше одного,
+        //   все игроки начинают сначала. Нужно 2 цикла рендера.
         // ai: {
         //   name: 'ai',
         //   side: 'stepTop',
