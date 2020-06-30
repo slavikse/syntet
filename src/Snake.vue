@@ -119,16 +119,16 @@ const stepsCountMultiplier = 5;
 const applesCount = 1;
 
 const hiddenLayers = 1;
-const units = 500;
+const units = 400;
 const epochs = 1;
 
-const terribleReward = -0.9;
+const terribleReward = -0.5;
 const badReward = -0.1;
-const basicReward = 0.1;
-const goodReward = 0.4;
+const basicReward = 0.3;
+const goodReward = 0.6;
 const bestReward = 0.9;
 
-const decreaseMultiplier = 0.4;
+const decreaseMultiplier = 0.8;
 const increaseMultiplier = 1.1;
 
 let isFitting = false;
@@ -224,6 +224,9 @@ export default {
   },
 
   mounted() {
+    const version = 1;
+    console.log(version);
+
     this.incrementTimer();
 
     this.initialField();
