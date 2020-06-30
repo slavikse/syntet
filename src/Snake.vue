@@ -119,7 +119,7 @@ const stepsCountMultiplier = 5;
 const applesCount = 1;
 
 const hiddenLayers = 1;
-const units = 1000;
+const units = 500;
 const epochs = 1;
 
 const terribleReward = -0.9;
