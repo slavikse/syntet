@@ -42,7 +42,7 @@
           :to="{ name: 'Snake' }"
           class="route"
         >
-          Змейка <span>(Приостановлен)</span>
+          Змейка <span>(В разработке)</span>
         </router-link>
 
         <!--
@@ -107,6 +107,7 @@ export default {
   scoped
 >
 .App {
+  height: 100vh;
 }
 
 .title {
@@ -118,6 +119,7 @@ export default {
 .routers {
   position: absolute;
   top: 0;
+  left: 0;
   z-index: 1;
   padding: 10px;
   color: gray;

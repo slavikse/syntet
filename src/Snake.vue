@@ -1,5 +1,50 @@
 <template>
   <div class="Snake">
+    <div class="text-container">
+      <div class="message">
+        Ручное управление WASD
+      </div>
+
+      <div class="steps-count">
+        Количество оставшихся ходов: {{ maximumStepsCount - stepsCount }}
+      </div>
+
+      <div class="timer">
+        Время обучения: {{ timer }} секунд (~{{ Math.round(timer / 60) }} минут)
+      </div>
+
+      <div class="lives">
+        Сыграно жизней: {{ lives }}
+      </div>
+
+      <div class="actors-container">
+        <div class="title">
+          Собрано яблок за жизнь
+        </div>
+
+        <div
+          v-for="actor in Object.values(actors)"
+          :key="actor.name"
+          class="actor"
+        >
+          <div
+            :style="{ color: actor.colorHead }"
+            class="name"
+          >
+            {{ actor.name }}:
+          </div>
+
+          <div
+            v-if="stats[actor.name]"
+            :style="{ color: actor.colorHead }"
+            class="stats"
+          >
+            {{ stats[actor.name].maxApples }}
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="field">
       <div
         v-for="(row, rowIndex) in field"
@@ -13,41 +58,6 @@
           class="cell"
         >
           <!-- {{ rowIndex }} {{ cellIndex }}-->
-        </div>
-      </div>
-    </div>
-
-    <div class="message">
-      По нажатию WASD начнётся игра
-    </div>
-
-    <div class="steps-count">
-      Количество оставшихся ходов: {{ maximumStepsCount - stepsCount }}
-    </div>
-
-    <div class="timer">
-      Время обучения: {{ timer }} секунд (~{{ Math.round(timer / 60) }} минут)
-    </div>
-
-    <div class="actors">
-      <div
-        v-for="actor in Object.values(actors)"
-        :key="actor.name"
-        class="actor"
-      >
-        <div
-          :style="{ color: actor.colorHead }"
-          class="name"
-        >
-          {{ actor.name }}:
-        </div>
-
-        <div
-          v-if="stats[actor.name]"
-          :style="{ color: actor.colorHead }"
-          class="stats"
-        >
-          {{ stats[actor.name].maxApples }}
         </div>
       </div>
     </div>
@@ -102,21 +112,36 @@ const sidesIndex = {
 const numberSides = Object.keys(indexSides).length;
 
 const isDevelopment = false;
-const fieldSize = 30;
-const autoMovementDelay = 500;
+const autoMovementDelay = 100;
 
-const terribleReward = -1.0;
+const fieldSize = 40;
+const stepsCountMultiplier = 5;
+const applesCount = 1;
+
+const hiddenLayers = 1;
+const units = 1000;
+const epochs = 1;
+
+const terribleReward = -0.9;
 const badReward = -0.1;
 const basicReward = 0.1;
-const goodReward = 0.5;
-const bestReward = 1.0;
+const goodReward = 0.4;
+const bestReward = 0.9;
 
-const units = 128;
-const epochs = 16;
+const decreaseMultiplier = 0.4;
+const increaseMultiplier = 1.1;
 
+let isFitting = false;
 let nextFrameId = -1;
 
 const startPositions = {
+  center: [
+    { id: nanoid(), position: { y: 9, x: 7 } },
+    { id: nanoid(), position: { y: 9, x: 8 } },
+    { id: nanoid(), position: { y: 8, x: 8 } },
+    { id: nanoid(), position: { y: 7, x: 8 } },
+    { id: nanoid(), position: { y: 7, x: 7 } },
+  ],
   topLeft: [
     { id: nanoid(), position: { y: 7, x: 3 } },
     { id: nanoid(), position: { y: 6, x: 3 } },
@@ -138,16 +163,14 @@ const startPositions = {
     { id: nanoid(), position: { y: fieldSize - 5, x: fieldSize - 4 } },
     { id: nanoid(), position: { y: fieldSize - 4, x: fieldSize - 4 } },
   ],
-  // bottomLeft: [
-  //   { id: nanoid(), position: { y: fieldSize - 4, x: 7 } },
-  //   { id: nanoid(), position: { y: fieldSize - 4, x: 6 } },
-  //   { id: nanoid(), position: { y: fieldSize - 4, x: 5 } },
-  //   { id: nanoid(), position: { y: fieldSize - 4, x: 4 } },
-  //   { id: nanoid(), position: { y: fieldSize - 4, x: 3 } },
-  // ],
+  bottomLeft: [
+    { id: nanoid(), position: { y: fieldSize - 4, x: 7 } },
+    { id: nanoid(), position: { y: fieldSize - 4, x: 6 } },
+    { id: nanoid(), position: { y: fieldSize - 4, x: 5 } },
+    { id: nanoid(), position: { y: fieldSize - 4, x: 4 } },
+    { id: nanoid(), position: { y: fieldSize - 4, x: 3 } },
+  ],
 };
-
-// todo статичные преграды
 
 export default {
   name: 'Snake',
@@ -171,37 +194,29 @@ export default {
           training: { inputs: [], labels: [] },
           rewards: Array(numberSides).fill(basicReward),
         },
-        ai: {
-          name: 'ai',
-          side: 'stepTop',
-
-          colorHead: actorsColors[2],
-          colorTail: actorsColors[3],
-          cells: [ // bottomLeft
-            { id: nanoid(), position: { y: fieldSize - 4, x: 7 } },
-            { id: nanoid(), position: { y: fieldSize - 4, x: 6 } },
-            { id: nanoid(), position: { y: fieldSize - 4, x: 5 } },
-            { id: nanoid(), position: { y: fieldSize - 4, x: 4 } },
-            { id: nanoid(), position: { y: fieldSize - 4, x: 3 } },
-          ],
-
-          model: tf.sequential(),
-          training: { inputs: [], labels: [] },
-          rewards: Array(numberSides).fill(basicReward),
-        },
+        // ai: {
+        //   name: 'ai',
+        //   side: 'stepTop',
+        //
+        //   colorHead: actorsColors[2],
+        //   colorTail: actorsColors[3],
+        //   cells: cloneDeep(startPositions.bottomRight),
+        //
+        //   model: tf.sequential(),
+        //   training: { inputs: [], labels: [] },
+        //   rewards: Array(numberSides).fill(basicReward),
+        // },
       },
       actorsDefault: {},
 
       stats: {}, // Инициализируется в initialStats на основе actors.
       stepsCount: 0,
-      maximumStepsCount: fieldSize * 5,
+      maximumStepsCount: fieldSize * stepsCountMultiplier,
       timer: 0,
+      lives: 0,
+      everyLives: 300,
 
-      // todo для сбора двух и более яблок, нужен алгоритм ближайшего яблока + для обучения
-      apples: [
-        { y: -1, x: -1 },
-        // { y: -1, x: -1 },
-      ],
+      apples: [],
 
       mode: isDevelopment ? 'gaming' : 'training',
       isRunning: true,
@@ -209,15 +224,16 @@ export default {
   },
 
   mounted() {
+    this.incrementTimer();
+
     this.initialField();
+    this.initialApples();
     this.initialActors();
     this.initialStats();
 
-    this.apples.forEach(this.addApple);
+    // this.chooseActorsPosition();
+
     this.autoStep();
-
-    this.incrementTimer();
-
     window.addEventListener('keydown', this.handleKeys);
   },
 
@@ -226,6 +242,11 @@ export default {
   },
 
   methods: {
+    incrementTimer() {
+      setTimeout(this.incrementTimer, 1000);
+      this.timer += 1;
+    },
+
     initialField() {
       const field = Array(fieldSize);
 
@@ -233,11 +254,12 @@ export default {
         field[y] = Array(fieldSize);
 
         for (let x = 0; x < fieldSize; x += 1) {
-          const isBarrier = y <= 1 || y >= fieldSize - 2 || x <= 1 || x >= fieldSize - 2;
+          const isBarrier = y <= 0 || y >= fieldSize - 1 || x <= 0 || x >= fieldSize - 1;
           field[y][x] = isBarrier ? barrierColor : basicColor;
         }
       }
 
+      // todo статичные преграды
       // field[10][3] = barrierColor;
       // field[10][4] = barrierColor;
       // field[10][5] = barrierColor;
@@ -252,20 +274,33 @@ export default {
       this.fieldDefault = cloneDeep(this.field);
     },
 
+    initialApples() {
+      for (let i = 0; i < applesCount; i += 1) {
+        this.apples.push({ y: -1, x: -1 });
+      }
+
+      this.apples.forEach(this.addApple);
+    },
+
+    addApple(coords) {
+      const y = Math.round(Math.random() * (fieldSize - 1));
+      const x = Math.round(Math.random() * (fieldSize - 1));
+
+      if (this.field[y][x] === basicColor) {
+        coords.y = y;
+        coords.x = x;
+
+        this.field[y][x] = appleColor;
+      } else {
+        this.addApple(coords);
+      }
+    },
+
     initialActors() {
       Object.values(this.actors).forEach(this.setupModel);
       this.actorsDefault = cloneDeep(this.actors);
 
       this.resetActors();
-    },
-
-    chooseActorsPosition() {
-      const positions = Object.keys(startPositions);
-      const position = positions[Math.round((positions.length - 1) * Math.random())];
-
-      Object.values(this.actors).forEach((actor) => {
-        actor.cells = cloneDeep(startPositions[position]);
-      });
     },
 
     resetActors() {
@@ -291,29 +326,19 @@ export default {
       });
     },
 
-    incrementTimer() {
-      setTimeout(this.incrementTimer, 1000);
-      this.timer += 1;
-    },
-
     resetStats() {
       Object.values(this.actors).forEach((actor) => {
         this.stats[actor.name].apples = 0;
       });
     },
 
-    addApple(coords) {
-      const y = Math.round(Math.random() * (fieldSize - 1));
-      const x = Math.round(Math.random() * (fieldSize - 1));
+    chooseActorsPosition() {
+      const positions = Object.keys(startPositions);
+      const position = positions[Math.round((positions.length - 1) * Math.random())];
 
-      if (this.field[y][x] === basicColor) {
-        coords.y = y;
-        coords.x = x;
-
-        this.field[y][x] = appleColor;
-      } else {
-        this.addApple(coords);
-      }
+      Object.values(this.actors).forEach((actor) => {
+        actor.cells = cloneDeep(startPositions[position]);
+      });
     },
 
     handleKeys({ code }) {
@@ -385,25 +410,26 @@ export default {
       const nextColor = this.field[y][x];
 
       if (barriersColors.includes(nextColor)) {
-        this.changeExperienceReward({ type: 'decrease', actor });
-        this.preserveExperience(actor);
+        this.preserveExperience({ type: 'decrease', actor });
         this.gameOver();
+      } else if (nextColor === appleColor) {
+        this.preserveExperience({ type: 'increase', actor });
+        this.growth({ actor, y, x });
+        this.applyNextCell({ actor, cellHead, y, x });
+
+        const coords = this.apples.find((a) => `${a.y}_${a.x}` === `${y}_${x}`);
+        this.addApple(coords);
+
+        this.appleFit();
       } else {
-        /* eslint-disable */
-        if (nextColor === appleColor) {
-          this.changeExperienceReward({ type: 'increase', actor });
-          this.preserveExperience(actor);
-          this.growth({ actor, y, x });
-
-          const coords = this.apples.find((a) => `${a.y}_${a.x}` === `${y}_${x}`);
-          this.addApple(coords);
-        } else {
-          // this.preserveExperience(actor);
-        }
-
-        cellHead.position = { y, x };
-        this.field[y][x] = actor.colorHead;
+        this.preserveExperience({ type: 'pass', actor });
+        this.applyNextCell({ actor, cellHead, y, x });
       }
+    },
+
+    applyNextCell({ actor, cellHead, y, x }) {
+      cellHead.position = { y, x };
+      this.field[y][x] = actor.colorHead;
     },
 
     growth({ actor, y, x }) {
@@ -413,7 +439,6 @@ export default {
         this.stats[actor.name].maxApples = this.stats[actor.name].apples;
       }
 
-      // todo индивидуальную? которая просто остановит игру для игрока, а другой будет играть?
       this.stepsCount = 0;
 
       actor.cells.push({
@@ -434,7 +459,8 @@ export default {
         this.field = cloneDeep(this.fieldDefault);
         this.actors = cloneDeep(this.actorsDefault);
 
-        this.chooseActorsPosition();
+        // this.chooseActorsPosition();
+
         this.resetActors();
         this.resetStats();
 
@@ -447,19 +473,25 @@ export default {
 
     // ----------------------------------------- Алгоритм ML -------------------------------------------------
 
-    // todo преграды
     setupModel({ model }) {
       model.add(tf.layers.dense({
         inputShape: [
-          // todo оценка количества ходов. чем меньше было сделано для получения яблока, тем выше награда.
-          // Сканеры следующих ячеек для 4 сторон.
-          numberSides
-          // Расстояние до яблок, чем оно меньше, тем выше награда.
-          + this.apples.length,
+          // +4 - Занятость ближних ячеек.
+          // +4 - Направления яблока.
+          // +1 - Расстояние до ближнего яблока.
+          // +1 - Количество ходов.
+          numberSides + numberSides + 1 + 1,
         ],
-        activation: 'sigmoid',
+        activation: 'relu',
         units,
       }));
+
+      for (let i = 0; i < hiddenLayers; i += 1) {
+        model.add(tf.layers.dense({
+          activation: 'relu',
+          units,
+        }));
+      }
 
       model.add(tf.layers.dense({
         activation: 'sigmoid',
@@ -472,21 +504,10 @@ export default {
       });
     },
 
-    // todo сканер для далёких (ближайшая уже оценивается) преград? расстояние?
-    // todo врага так же разметить как -1 (стена)
     async modelsPredicts() {
       await Promise.all(Object.values(this.actors).map((actor) => (async () => {
-        const [{ position: actorHead }] = actor.cells;
-
-        // todo оценивается предыдущая ячейка головы???
-        this.whichSidesOfApples({ actor, actorHead });
-        // this.assessmentNearbyObstacles({ actor, actorHead });
-
-        // console.log(actor.rewards);
-
         if (this.mode === 'gaming' && actor.name === 'human') {
           await this.modelPredict(actor);
-          // pass
         } else {
           const indexSide = await this.modelPredict(actor);
           actor.side = indexSides[indexSide];
@@ -502,7 +523,118 @@ export default {
       }
     },
 
-    whichSidesOfApples({ actor, actorHead }) {
+    async modelPredict(actor) {
+      const dataInputs = this.assessment(actor);
+      this.whichSidesOfApples(actor);
+
+      const inputs = dataInputs.concat(actor.rewards);
+      const sides = await actor.model.predict(tf.tensor2d([inputs])).data();
+
+      // if (this.lives % this.everyLives === 0) {
+      //   console.log('modelPredict', sides);
+      // }
+
+      return sides.indexOf(Math.max(...sides));
+    },
+
+    assessment(actor) {
+      const [{ position: actorHead }] = actor.cells;
+      const inputs = [];
+
+      Object.keys(sidesIndex).forEach((side) => {
+        const { y: nextY, x: nextX } = this[side]({ y: actorHead.y, x: actorHead.x });
+        const nextColor = this.field[nextY][nextX];
+
+        if (barriersColors.includes(nextColor)) {
+          inputs.push(terribleReward);
+        } else if (nextColor === appleColor) {
+          inputs.push(bestReward);
+        } else {
+          inputs.push(goodReward);
+        }
+      });
+
+      inputs.push(this.getDippedAppleReward(actorHead));
+      inputs.push(this.estimateNumberMoves());
+
+      return inputs;
+    },
+
+    getDippedAppleReward(actorHead) {
+      let appleReward = 0;
+
+      this.apples.forEach((apple) => {
+        const distance = this.distanceToApple({ apple, actorHead });
+        const reward = (fieldSize - distance) / fieldSize;
+
+        if (reward > appleReward) {
+          appleReward = reward;
+        }
+      });
+
+      return appleReward;
+    },
+
+    distanceToApple({ apple, actorHead }) {
+      const x = (apple.x - actorHead.x) ** 2;
+      const y = (apple.y - actorHead.y) ** 2;
+
+      return Math.sqrt(x + y);
+    },
+
+    estimateNumberMoves() {
+      if (this.stepsCount < fieldSize * 0.5) {
+        return bestReward;
+      }
+
+      if (this.stepsCount < fieldSize) {
+        return goodReward;
+      }
+
+      if (this.stepsCount < fieldSize * 1.5) {
+        return basicReward;
+      }
+
+      return badReward;
+    },
+
+    // todo врезается в себя при поворотах
+    preserveExperience({ type, actor }) {
+      const dataInputs = this.assessment(actor);
+      this.whichSidesOfApples(actor);
+
+      const inputs = dataInputs.concat(actor.rewards);
+
+      actor.training.inputs.push(inputs);
+      actor.training.labels.push(actor.rewards);
+
+      if (type === 'decrease') {
+        actor.training.inputs = actor.training.inputs
+          .map((trainInputs) => trainInputs.map((input) => input * decreaseMultiplier));
+
+        actor.training.labels = actor.training.labels
+          .map((trainLabels) => trainLabels.map((label) => label * decreaseMultiplier));
+      } else if (type === 'increase') {
+        actor.training.inputs = actor.training.inputs
+          .map((trainInputs) => trainInputs.map((input) => input * increaseMultiplier));
+
+        actor.training.labels = actor.training.labels
+          .map((trainLabels) => trainLabels.map((label) => label * increaseMultiplier));
+      }
+
+      // if (isDevelopment) {
+      //   console.log('---');
+      //   actor.training.inputs.forEach((input) => console.log(input));
+      //   actor.training.labels.forEach((label) => console.log(label));
+      //   console.log(actor.rewards);
+      // }
+
+      this.resetRewards(actor);
+    },
+
+    whichSidesOfApples(actor) {
+      const [{ position: actorHead }] = actor.cells;
+
       this.apples.forEach((apple) => {
         if (apple.x === actorHead.x) {
           this.appleOnAxisX({ apple, actor, actorHead });
@@ -600,120 +732,28 @@ export default {
       actor.rewards[sidesIndex.stepRight] = badReward;
     },
 
-    // const inputs = [];
-    // const [{ position: { y, x } }] = actor.cells;
-    //
-    // Object.keys(sidesIndex).forEach((side, sideIndex) => {
-    //   const { y: nextY, x: nextX } = this[side]({ y, x });
-    //   const nextColor = this.field[nextY][nextX];
-    //
-    //   if (barriersColors.includes(nextColor)) {
-    //     inputs[sideIndex] = terribleReward;
-    //   } else {
-    //     inputs[sideIndex] = goodReward;
-    //   }
-    // });
-    // todo 4 ближние стороны
-    async modelPredict(actor) {
-      // const inputs = this.fieldEstimation(actor);
-      const inputs = this.assessmentNearbyObstacles(actor);
-      const sides = await actor.model.predict(tf.tensor2d([inputs])).data();
+    appleFit() {
+      this.isRunning = false;
 
-      return sides.indexOf(Math.max(...sides));
-    },
+      cancelAnimationFrame(nextFrameId);
+      clearTimeout(nextFrameId);
+      nextFrameId = -1;
 
-    assessmentNearbyObstacles(actor) {
-      const [{ position: actorHead }] = actor.cells;
-      const inputs = [];
-
-      Object.keys(sidesIndex).forEach((side) => {
-        const { y: nextY, x: nextX } = this[side]({ y: actorHead.y, x: actorHead.x });
-        const nextColor = this.field[nextY][nextX];
-
-        if (barriersColors.includes(nextColor)) {
-          inputs.push(terribleReward);
-        } else if (nextColor === appleColor) {
-          inputs.push(bestReward);
-        } else {
-          inputs.push(goodReward);
-        }
+      this.modelFit(() => {
+        this.mode = isDevelopment ? 'gaming' : 'training';
+        this.isRunning = true;
       });
-
-      this.apples.forEach((apple) => {
-        const distance = this.distanceToApple({ apple, actorHead });
-        inputs.push(((fieldSize - distance) / fieldSize));
-      });
-
-      // console.log('inputs', inputs);
-
-      return inputs;
     },
 
-    distanceToApple({ apple, actorHead }) {
-      const x = Math.pow(apple.x - actorHead.x, 2);
-      const y = Math.pow(apple.y - actorHead.y, 2);
-
-      return Math.sqrt(x + y);
-    },
-
-    // todo сюда добавлять оценку интересных объектов
-    // fieldEstimation(actor) {
-    //   const inputs = [];
-    //
-    //   this.field.forEach((row) => {
-    //     row.forEach((cell) => {
-    //       if (barriersColors.includes(cell)) {
-    //         inputs.push(terribleReward);
-    //       } else if (cell === appleColor) {
-    //         inputs.push(bestReward);
-    //       } else {
-    //         inputs.push(goodReward);
-    //       }
-    //     });
-    //   });
-    //
-    //   const [{ position: actorHead }] = actor.cells;
-    //
-    //   this.apples.forEach((apple) => {
-    //     const distance = this.distanceToApple({ apple, actorHead });
-    //     inputs.push((fieldSize - distance) / fieldSize * multiplierAppleDistanceReward);
-    //   });
-    //
-    //   return inputs;
-    // },
-
-    // const inputs = [];
-    // const [{ position: { y, x } }] = actor.cells;
-    //
-    // Object.keys(sidesIndex).forEach((side, sideIndex) => {
-    //   const { y: nextY, x: nextX } = this[side]({ y, x });
-    //   const nextColor = this.field[nextY][nextX];
-    //
-    //   if (barriersColors.includes(nextColor)) {
-    //     inputs[sideIndex] = terribleReward;
-    //   } else {
-    //     inputs[sideIndex] = goodReward;
-    //   }
-    // });
-    preserveExperience(actor) {
-      // const inputs = this.fieldEstimation(actor);
-      const inputs = this.assessmentNearbyObstacles(actor);
-
-      actor.training.inputs.push(inputs);
-      actor.training.labels.push(actor.rewards);
-    },
-
-    changeExperienceReward({ type, actor }) {
-      if (type === 'decrease') {
-        actor.rewards[sidesIndex[actor.side]] = terribleReward;
-      } else if (type === 'increase') {
-        actor.rewards[sidesIndex[actor.side]] = bestReward;
-      }
-    },
-
-    // todo если было собрано яблоко, то все ходы сделанные для сбора, получают +1, те, которые не меньше 0
-    // те, которые привели в проигрышу занижаются.
     modelFit(callbackAtEndTraining) {
+      // Обучение происходит для всех, поэтому требуется только одно выполнение.
+      if (isFitting) {
+        return;
+      }
+
+      isFitting = true;
+      this.lives += 1;
+
       Promise.all(Object.values(this.actors).map(async (actor) => {
         if (actor.training.labels.length > 0) {
           await actor.model.fit(
@@ -724,10 +764,15 @@ export default {
 
           actor.training.inputs = [];
           actor.training.labels = [];
-
-          this.resetRewards(actor);
         }
-      })).then(callbackAtEndTraining);
+      })).then(async () => {
+        // await new Promise((resolve) => {
+        //   setTimeout(resolve, autoMovementDelay);
+        // });
+
+        isFitting = false;
+        callbackAtEndTraining();
+      });
     },
   },
 };
@@ -738,16 +783,67 @@ export default {
   scoped
 >
 .Snake {
-  --size: 30px;
+  --size: 20px;
 
-  margin-top: 20px;
   display: flex;
-  flex-direction: column;
+  justify-content: center;
   align-items: center;
+  height: 100vh;
   user-select: none;
   outline: none;
 
+  .text-container {
+    text-align: center;
+
+    .message {
+      margin-top: 10px;
+      text-align: center;
+      color: gray;
+    }
+
+    .steps-count {
+      text-align: center;
+      color: dimgray;
+    }
+
+    .timer {
+      font-size: 14px;
+      color: dimgray;
+    }
+
+    .lives {
+      font-size: 14px;
+      color: dimgray;
+    }
+
+    .actors-container {
+      margin-top: 20px;
+
+      .title {
+        font-size: 16px;
+        color: gray;
+      }
+
+      .actor {
+        display: flex;
+        justify-content: center;
+
+        .name {
+          padding-right: 10px;
+          text-transform: uppercase;
+        }
+
+        .stats {
+          font-weight: bold;
+          min-width: 30px;
+        }
+      }
+    }
+  }
+
   .field {
+    margin-left: 20px;
+
     .row {
       display: flex;
 
@@ -758,44 +854,7 @@ export default {
         width: var(--size);
         height: var(--size);
         font-size: 10px;
-        color: #555;
-      }
-    }
-  }
-
-  .message {
-    margin-top: 10px;
-    text-align: center;
-    color: gray;
-  }
-
-  .steps-count {
-    text-align: center;
-    color: gray;
-  }
-
-  .timer {
-    font-size: 12px;
-    color: dimgray;
-  }
-
-  .actors {
-    margin-top: 20px;
-
-    .actor {
-      display: flex;
-      justify-content: space-between;
-
-      .name {
-        padding-right: 10px;
-        width: 100%;
-        text-align: end;
-        text-transform: uppercase;
-      }
-
-      .stats {
-        font-weight: bold;
-        min-width: 30px;
+        color: #777;
       }
     }
   }
