@@ -112,23 +112,23 @@ const sidesIndex = {
 const numberSides = Object.keys(indexSides).length;
 
 const isDevelopment = false;
-const autoMovementDelay = 100;
+const autoMovementDelay = 50;
 
-const fieldSize = 40;
-const stepsCountMultiplier = 5;
+const fieldSize = 60;
+const stepsCountMultiplier = 2.5;
 const applesCount = 1;
 
 const hiddenLayers = 1;
-const units = 400;
+const units = 2000;
 const epochs = 1;
 
-const terribleReward = -0.5;
-const badReward = -0.1;
-const basicReward = 0.3;
-const goodReward = 0.6;
+const terribleReward = -0.9;
+const badReward = -0.9;
+const basicReward = 0.1;
+const goodReward = 0.9;
 const bestReward = 0.9;
 
-const decreaseMultiplier = 0.8;
+const decreaseMultiplier = 0.9;
 const increaseMultiplier = 1.1;
 
 let isFitting = false;
@@ -224,7 +224,7 @@ export default {
   },
 
   mounted() {
-    const version = 1;
+    const version = 2;
     console.log(version);
 
     this.incrementTimer();
@@ -519,6 +519,10 @@ export default {
         this.step(actor);
       })()));
 
+      // await new Promise((resolve) => {
+      //   setTimeout(resolve, autoMovementDelay);
+      // });
+
       this.stepsCount += 1;
 
       if (this.stepsCount === this.maximumStepsCount) {
@@ -568,7 +572,7 @@ export default {
 
       this.apples.forEach((apple) => {
         const distance = this.distanceToApple({ apple, actorHead });
-        const reward = (fieldSize - distance) / fieldSize;
+        const reward = (fieldSize - (distance + 1)) / fieldSize;
 
         if (reward > appleReward) {
           appleReward = reward;
@@ -586,22 +590,25 @@ export default {
     },
 
     estimateNumberMoves() {
-      if (this.stepsCount < fieldSize * 0.5) {
+      const fieldSizeBestReward = fieldSize * 0.5;
+
+      if (((fieldSizeBestReward - this.stepsCount) / fieldSizeBestReward) > 0) {
         return bestReward;
       }
 
-      if (this.stepsCount < fieldSize) {
+      if (((fieldSize - this.stepsCount) / fieldSize) > 0) {
         return goodReward;
       }
 
-      if (this.stepsCount < fieldSize * 1.5) {
+      const fieldSizeBasicReward = fieldSize * 1.5;
+
+      if (((fieldSizeBasicReward - this.stepsCount) / fieldSizeBasicReward) > 0) {
         return basicReward;
       }
 
       return badReward;
     },
 
-    // todo врезается в себя при поворотах
     preserveExperience({ type, actor }) {
       const dataInputs = this.assessment(actor);
       this.whichSidesOfApples(actor);
@@ -786,7 +793,7 @@ export default {
   scoped
 >
 .Snake {
-  --size: 20px;
+  --size: 12px;
 
   display: flex;
   justify-content: center;
@@ -796,6 +803,7 @@ export default {
   outline: none;
 
   .text-container {
+    width: 300px;
     text-align: center;
 
     .message {
