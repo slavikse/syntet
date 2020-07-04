@@ -4,8 +4,9 @@ import VueRouter from 'vue-router';
 import App from '@/App.vue';
 import TicTacToe from '@/TicTacToe/TicTacToe.vue';
 import Square from '@/Square.vue';
-
 import Snake from '@/Snake.vue';
+
+// import Symbols from '@/Symbols.vue';
 // import Puppet from '@/Puppet.vue';
 // import Cart from '@/Cart.vue';
 // import Bird from '@/Bird.vue';
@@ -23,28 +24,34 @@ new Vue({
       {
         path: '/',
         name: 'App',
-        meta: { isReload: false },
         component: App,
         redirect: { name: 'TicTacToe' },
+        meta: { isReload: false },
       },
       {
         path: '/TicTacToe',
         name: 'TicTacToe',
-        meta: { isReload: true },
         component: TicTacToe,
+        meta: { isReload: true },
       },
       {
         path: '/Square',
         name: 'Square',
-        meta: { isReload: true },
         component: Square,
+        meta: { isReload: true },
       },
       {
         path: '/Snake',
         name: 'Snake',
-        meta: { isReload: true },
         component: Snake,
+        meta: { isReload: true },
       },
+      // {
+      //   path: '/Symbols',
+      //   name: 'Symbols',
+      //   component: Symbols,
+      //   meta: { isReload: true },
+      // },
       // {
       //   path: '/Puppet',
       //   name: 'Puppet',

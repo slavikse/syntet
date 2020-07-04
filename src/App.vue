@@ -42,10 +42,17 @@
           :to="{ name: 'Snake' }"
           class="route"
         >
-          Змейка <span>(В разработке)</span>
+          Змейка <span>(Приостановлен)</span>
         </router-link>
 
         <!--
+        <router-link
+          :to="{ name: 'Symbols' }"
+          class="route"
+        >
+          Символы <span>(В разработке)</span>
+        </router-link>
+
         <router-link
           :to="{ name: 'Puppet' }"
           class="route"

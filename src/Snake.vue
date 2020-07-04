@@ -802,7 +802,6 @@ export default {
   align-items: center;
   height: 100vh;
   user-select: none;
-  outline: none;
 
   .text-container {
     width: 300px;
