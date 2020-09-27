@@ -1,5 +1,5 @@
 ![logo](public/logo.png)
-![stat](https://mc.yandex.ru/watch/64632112)
+![stat](https://mc.yandex.ru/watch/64632112?github_syntet)
 
 ### Машинное обучение с подкреплением на [tensorflow.js](https://www.tensorflow.org/js)
 
