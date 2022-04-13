@@ -1,14 +1,10 @@
 ''' Задачи:
-Перенести код в syntet
-
 Лабиринт:
 + 1. Статичный
-2. Бесконечный
++ 2. Бесконечный
 + 3. Генерация: барьеры и путь
 + 4. Агент (координаты)
-5. Управление
-6. Прохождение
-7. Множество миров
++ 5. Прохождение
 '''
 
 from os import system
@@ -20,7 +16,10 @@ free = ' '
 ghost = '*'
 wall = '|'
 barrier = '-'
-agent = '^'  # todo разместить
+agent = '^'
+
+world = []
+world_blocks_row_quantity = 2
 
 world_block_keys = ['0', '1']
 world_blocks = {
@@ -46,23 +45,25 @@ world_blocks = {
     ],
 }
 world_block_empty = ['*', '|', ' ', ' ', '|']
-world_block_key = '0:0'
+world_block_key_current = '0:0'
 
-world = []
-world_blocks_row_quantity = 2
+world_block_row_count = len(world_blocks['0:0']) // len(world_block_empty)
 
 indexes_last_free_cells = [-3, -1]
 agent_state = {'init': False, 'x': -1, 'y': -1, 'step_index': -1}
 
 
-def generate_scene():
-    global world_block_key
+def generate_blocks_to_scene():
+    global world
+    global world_block_key_current
+
+    world = []
 
     for _ in range(world_blocks_row_quantity):
-        [left, _] = world_block_key.split(':')
+        [left, _] = world_block_key_current.split(':')
         right = choice(world_block_keys)
-        world_block_key = f'{left}:{right}'
-        world.extend(world_blocks[world_block_key])
+        world_block_key_current = f'{left}:{right}'
+        world.extend(world_blocks[world_block_key_current])
 
         if left != right:
             world.extend(world_block_empty)
@@ -83,6 +84,7 @@ def draw_scene():
             x = 0
             y += 1
             print()
+
         else:
             last_index = cell_index - len(world)
             [l, r] = indexes_last_free_cells
@@ -94,10 +96,13 @@ def draw_scene():
                 agent_state['y'] = y
 
                 print(agent, end='')
+
             elif x == agent_state['x'] and y == agent_state['y']:
                 print(agent, end='')
+
             else:
                 print(cell, end='')
+
     print()
 
 
@@ -108,12 +113,14 @@ def redraw_actor():
     if top_index >= 0 and world[top_index] == free:
         step_index = top_index
         agent_state['y'] -= 1
+
     else:
         left_index = can_actor_step_left()
 
         if world[left_index] == free:
             step_index = left_index
             agent_state['x'] -= 1
+
         else:
             right_index = can_actor_step_right()
 
@@ -136,21 +143,30 @@ def can_actor_step_right():
     return (agent_state['x'] + 1) + agent_state['y'] * len(world_block_empty)
 
 
-def clear_scene(delay=1):
+def clear_scene(delay=0.5):
     sleep(delay)
     system('clear')
 
 
+def add_blocks_to_scene():
+    if agent_state['y'] == 0:
+        agent_state['init'] = False
+        agent_state['x'] = -1
+        agent_state['y'] = -1
+
+        generate_blocks_to_scene()
+
+
 def game_loop():
     print(agent_state)
-    print('time:', time())
 
     clear_scene()
+    add_blocks_to_scene()
     draw_scene()
     redraw_actor()
 
 
-generate_scene()
+generate_blocks_to_scene()
 
 while True:
     game_loop()
