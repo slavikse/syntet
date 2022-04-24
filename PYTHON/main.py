@@ -1,10 +1,8 @@
 from os import system
 from time import sleep
 from random import choice
-
-import tensorflow as tf
-import numpy as np
 import operator
+import tensorflow as tf
 
 free = ' '
 ghost = '*'
@@ -13,48 +11,49 @@ barrier = '-'
 agent = '^'
 
 world = []
+world_len = 42
 world_blocks_row_quantity = 2
 
 world_block_keys = ['0', '1']
 world_blocks = {
     '0:0': [
-        '*', '|', ' ', '-', '|',
-        '*', '|', ' ', '-', '|',
-        '*', '|', ' ', '-', '|',
+        '*', '|', '|', ' ', '-', '|', '|',
+        '*', '|', '|', ' ', '-', '|', '|',
+        '*', '|', '|', ' ', '-', '|', '|',
     ],
     '0:1': [
-        '*', '|', ' ', '-', '|',
-        '*', '|', ' ', ' ', '|',
-        '*', '|', '-', ' ', '|',
+        '*', '|', '|', ' ', '-', '|', '|',
+        '*', '|', '|', ' ', ' ', '|', '|',
+        '*', '|', '|', '-', ' ', '|', '|',
     ],
     '1:0': [
-        '*', '|', '-', ' ', '|',
-        '*', '|', ' ', ' ', '|',
-        '*', '|', ' ', '-', '|',
+        '*', '|', '|', '-', ' ', '|', '|',
+        '*', '|', '|', ' ', ' ', '|', '|',
+        '*', '|', '|', ' ', '-', '|', '|',
     ],
     '1:1': [
-        '*', '|', '-', ' ', '|',
-        '*', '|', '-', ' ', '|',
-        '*', '|', '-', ' ', '|',
+        '*', '|', '|', '-', ' ', '|', '|',
+        '*', '|', '|', '-', ' ', '|', '|',
+        '*', '|', '|', '-', ' ', '|', '|',
     ],
 }
-world_block_empty = ['*', '|', ' ', ' ', '|']
+world_block_empty = ['*', '|', '|', ' ', ' ', '|', '|']
 world_block_key_current = '0:0'
 
 world_block_row_count = len(world_blocks['0:0']) // len(world_block_empty)
 
-indexes_last_free_cells = [-3, -1]
+indexes_last_free_cells = [-4, -2]
 agent_state = {'init': False, 'x': -1, 'y': -1, 'step_index': -1}
 
 # ML Configure
 models = tf.keras.models
 layers = tf.keras.layers
 
-inputs = []  # [[]]
-labels = []  # [[]]
+inputs = []  # [[]] - world
+labels = []  # [[]] - top, left, right
 
 model = models.Sequential([
-    layers.Dense(3, activation='relu'),
+    layers.Dense(world_len, activation='relu'),
     layers.Dropout(0.2),
     layers.Dense(10, activation='relu'),
     layers.Dense(3, activation='softmax')
@@ -83,8 +82,11 @@ def generate_blocks_to_scene():
             world.extend(world_block_empty)
 
     # Удаление строки с двумя пробелами.
-    if world[-len(world_block_empty):].count(free) == len(world_block_keys):
-        del world[-len(world_block_empty):]
+    # if world[-len(world_block_empty):].count(free) == len(world_block_keys):
+    #     del world[-len(world_block_empty):]
+
+    # Хак, чтобы генерировался мир всегда с одинаковым количеством элементов.
+    world = world[:world_len]
 
 
 def draw_scene():
@@ -121,6 +123,7 @@ def draw_scene():
     print()
 
 
+# Алгоритм прохождения.
 def redraw_actor():
     top_index = get_actor_step_top()
     step_index = -1
@@ -146,40 +149,62 @@ def redraw_actor():
     agent_state['step_index'] = step_index
 
 
+# ML алгоритм прохождения.
 def redraw_actor_ml():
+    global model
+    step_index = -1
+
     top_index = get_actor_step_top()
     left_index = get_actor_step_left()
     right_index = get_actor_step_right()
 
-    [pred] = model.predict([[top_index, left_index, right_index]])
-    pred_index, pred_value = max(enumerate(pred), key=operator.itemgetter(1))
-    print(pred_index, pred_value)
+    world_numbers = []
 
-    # todo проверка пересечения с перегородкой, куда собирается перейти агент
-    # вызывать при попадании в перегородку: model.fit(inputs, labels, epochs=16)
-    if pred_index == 0:
-        agent_state['y'] -= 1
+    for cell in world:
+        if cell == free:
+            world_numbers.append(0.7)
+        else:
+            world_numbers.append(0.01)
 
-    elif pred_index == 1:
-        agent_state['x'] -= 1
+    [pred] = model.predict([world_numbers])
 
-    elif pred_index == 2:
-        agent_state['x'] += 1
+    pred_dir_index, pred_value = max(
+        enumerate(pred),
+        key=operator.itemgetter(1))
 
-    print(agent_state)
+    print(pred_dir_index, pred_value)
 
-    agent_state['step_index'] = pred_index
+    try:
+        if pred_dir_index == 0 and world[top_index] == free:  # top
+            step_index = top_index
+            agent_state['y'] -= 1
 
-    # ///
+            labels.append([0.99, 0.3, 0.3])
 
-    inputs.append([top_index, left_index, right_index])
+        else:
+            if pred_dir_index == 1 and world[left_index] == free:  # left
+                step_index = left_index
+                agent_state['x'] -= 1
 
-    # todo выходит за пределы поля
-    labels.append([
-        1 if top_index >= 0 and world[top_index] == free else 0.1,
-        1 if world[left_index] == free else 0.1,
-        1 if world[right_index] == free else 0.1,
-    ])
+                labels.append([0.3, 0.99, 0.3])
+
+            else:
+                if pred_dir_index == 2 and world[right_index] == free:  # right
+                    step_index = right_index
+                    agent_state['x'] += 1
+
+                    labels.append([0.3, 0.3, 0.99])
+
+        if step_index == -1:
+            learning(-1)
+
+        else:
+            agent_state['step_index'] = step_index
+
+    except:
+        pass
+        # print('except')
+        # learning(-1)
 
 
 def get_actor_step_top():
@@ -194,24 +219,63 @@ def get_actor_step_right():
     return (agent_state['x'] + 1) + agent_state['y'] * len(world_block_empty)
 
 
-def clear_scene(delay=0.1):
+def clear_scene(delay):
     sleep(delay)
     system('clear')
 
 
-def add_blocks_to_scene():
+def replace_blocks_to_scene():
     if agent_state['y'] == 0:
-        agent_state['init'] = False
-        agent_state['x'] = -1
-        agent_state['y'] = -1
-
+        reset_actor()
         generate_blocks_to_scene()
 
 
+def reset_actor():
+    agent_state['init'] = False
+    agent_state['x'] = -1
+    agent_state['y'] = -1
+
+
+def learning(pred_dir_index):
+    # print('learning...')
+
+    reset_actor()
+    generate_blocks_to_scene()
+
+    world_numbers = []
+
+    for cell in world:
+        if cell == free:
+            world_numbers.append(0.99)
+        else:
+            world_numbers.append(0.01)
+
+    inputs.append(world_numbers)
+
+    if pred_dir_index == -1:
+        labels.append([0.01, 0.01, 0.01])
+
+    elif pred_dir_index == 0:
+        labels.append([0.01, 0.5, 0.5])
+
+    elif pred_dir_index == 1:
+        labels.append([0.5, 0.01, 0.5])
+
+    elif pred_dir_index == 2:
+        labels.append([0.5, 0.5, 0.01])
+
+    model.fit(inputs, labels, epochs=1)
+    inputs = []
+    labels = []
+
+
 def game_loop():
-    clear_scene()
-    add_blocks_to_scene()
+    clear_scene(delay=0.001)
+    replace_blocks_to_scene()
+
+    # if tick % 1000 == 0:
     draw_scene()
+
     # redraw_actor()
     redraw_actor_ml()
 

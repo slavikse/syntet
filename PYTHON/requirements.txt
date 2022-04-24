@@ -21,6 +21,7 @@ decorator==5.1.1
 defer==1.0.6
 distro==1.4.0
 distro-info===0.23ubuntu1
+dm-reverb==0.7.1
 dm-tree==0.1.7
 duplicity==0.8.12.0
 entrypoints==0.3
@@ -66,7 +67,9 @@ paramiko==2.6.0
 pbr==5.8.1
 pexpect==4.6.0
 Pillow==7.0.0
+portpicker==1.5.0
 protobuf==3.20.0
+psutil==5.9.0
 pyasn1==0.4.8
 pyasn1-modules==0.2.8
 pycairo==1.16.2
@@ -105,6 +108,7 @@ tensorflow==2.8.0
 tensorflow-io-gcs-filesystem==0.24.0
 tensorflow-probability==0.16.0
 termcolor==1.1.0
+testresources==2.0.1
 tf-agents==0.12.0
 tf-estimator-nightly==2.8.0.dev2021122109
 toml==0.10.2
