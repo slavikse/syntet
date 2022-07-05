@@ -116,7 +116,7 @@ typing_extensions==4.1.1
 ubuntu-advantage-tools==27.7
 ubuntu-drivers-common==0.0.0
 ufw==0.36
-ujson==5.2.0
+ujson==5.4.0
 unattended-upgrades==0.1
 urllib3==1.25.8
 usb-creator==0.3.7
