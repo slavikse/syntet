@@ -3,6 +3,8 @@
 
 ### Машинное обучение с подкреплением на [tensorflow.js](https://www.tensorflow.org/js)
 
+# syntet-2.0 - https://github.com/slavikse/syntet-2.0
+
 #### Архитектура
 * Исполнитель - критик.
 
